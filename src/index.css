@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #111111;
+    color: #e5e2e1;
+    font-family: 'Inter', sans-serif;
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: 'Bebas Neue', sans-serif;
+  }
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  }
+  .crimson-glow {
+    box-shadow: 0 0 20px rgba(204, 0, 0, 0.3);
+  }
+  .crimson-glow:hover {
+    box-shadow: 0 0 30px rgba(204, 0, 0, 0.5);
+  }
+  .text-stroke {
+    -webkit-text-stroke: 1px #333333;
+    color: transparent;
+  }
+}
