@@ -107,18 +107,17 @@ export default function LandingPage() {
               ))}
             </div>
           </div>
-          <div className="h-[450px] border-2 border-primary-container overflow-hidden">
-            <iframe
-              src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3959.012345!2d79.8898!3d7.0062!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2s114C+Negombo+Rd%2C+Wattala!5e0!3m2!1sen!2slk!4v1"
-              width="100%"
-              height="100%"
-              style={{ border: 0, filter: 'invert(90%) hue-rotate(180deg)' }}
-              allowFullScreen
-              loading="lazy"
-              referrerPolicy="no-referrer-when-downgrade"
-              title="IronHide Location"
-            />
-          </div>
+          <a
+            href="https://maps.google.com/maps?q=114C+Negombo+Road,+Wattala,+Sri+Lanka"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="h-[450px] border-2 border-primary-container overflow-hidden flex flex-col items-center justify-center gap-4 bg-surface-container group hover:border-primary-container transition-all"
+          >
+            <span className="material-symbols-outlined text-primary-container text-6xl group-hover:scale-110 transition-transform">location_on</span>
+            <p className="font-display text-headline-md uppercase">View on Google Maps</p>
+            <p className="font-body text-body-md text-on-surface-variant text-center px-8">114C Negombo Rd, Wattala 32350, Sri Lanka</p>
+            <span className="font-label-sm text-label-sm text-primary-container uppercase tracking-widest border border-primary-container px-4 py-2">Open Maps →</span>
+          </a>
         </div>
       </section>
     </PageWrapper>

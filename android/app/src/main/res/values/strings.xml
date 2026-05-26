@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">IronHide</string>
+    <string name="title_activity_main">IronHide</string>
+    <string name="package_name">lk.ironhide.fitness</string>
+    <string name="custom_url_scheme">lk.ironhide.fitness</string>
+</resources>
