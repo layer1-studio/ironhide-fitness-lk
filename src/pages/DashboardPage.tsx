@@ -93,6 +93,14 @@ function DashboardContent() {
               <span className="material-symbols-outlined">person</span>
               Edit Profile
             </Link>
+            <Link to="/id-card" className="w-full border border-surface-container-highest text-on-surface font-display text-[20px] py-4 uppercase hover:bg-surface-container-high transition-all flex items-center justify-center gap-3">
+              <span className="material-symbols-outlined">badge</span>
+              My Gym ID
+            </Link>
+            <Link to="/fitness" className="w-full border border-surface-container-highest text-on-surface font-display text-[20px] py-4 uppercase hover:bg-surface-container-high transition-all flex items-center justify-center gap-3">
+              <span className="material-symbols-outlined">fitness_center</span>
+              Fitness Log
+            </Link>
           </div>
         </div>
 

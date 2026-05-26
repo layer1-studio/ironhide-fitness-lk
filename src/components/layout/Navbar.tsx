@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
 import { auth } from '../../lib/firebase';
@@ -18,6 +18,7 @@ export function Navbar() {
     { to: '/', label: 'Home' },
     { to: '/facilities', label: 'Facilities' },
     { to: '/membership', label: 'Plans' },
+    { to: '/occupancy', label: 'Gym Status' },
     { to: '/contact', label: 'Contact' },
   ];
 
@@ -45,6 +46,8 @@ export function Navbar() {
           {user ? (
             <>
               <Link to="/dashboard" className="text-on-surface-variant hover:text-on-surface text-body-md font-body transition-colors">Dashboard</Link>
+              <Link to="/id-card" className="text-on-surface-variant hover:text-on-surface text-body-md font-body transition-colors">My ID</Link>
+              <Link to="/fitness" className="text-on-surface-variant hover:text-on-surface text-body-md font-body transition-colors">Fitness</Link>
               <button onClick={handleSignOut} className="text-on-surface-variant hover:text-on-surface text-body-md font-body transition-colors">Sign Out</button>
             </>
           ) : (
@@ -68,6 +71,8 @@ export function Navbar() {
           {user ? (
             <>
               <Link to="/dashboard" onClick={() => setMenuOpen(false)} className="text-on-surface text-body-md font-body">Dashboard</Link>
+              <Link to="/id-card" onClick={() => setMenuOpen(false)} className="text-on-surface text-body-md font-body">My ID</Link>
+              <Link to="/fitness" onClick={() => setMenuOpen(false)} className="text-on-surface text-body-md font-body">Fitness</Link>
               <button onClick={() => { handleSignOut(); setMenuOpen(false); }} className="text-left text-on-surface text-body-md font-body">Sign Out</button>
             </>
           ) : (
