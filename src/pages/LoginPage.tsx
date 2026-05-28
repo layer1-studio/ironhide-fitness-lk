@@ -49,8 +49,8 @@ export default function LoginPage() {
           <p className="text-body-md text-on-surface-variant font-body mb-8">Welcome back. Access your portal below.</p>
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            <Input label="Email Address" type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} error={errors.email} placeholder="your@email.com" />
-            <Input label="Password" type="password" value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} error={errors.password} placeholder="••••••••" />
+            <Input label="Email Address" type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} error={errors.email} placeholder="your@email.com" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
+            <Input label="Password" type="password" value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} error={errors.password} placeholder="••••••••" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
             {errors.submit && <p className="text-error text-body-md font-body">{errors.submit}</p>}
             <Button type="submit" variant="primary" size="lg" loading={loading} className="w-full">SIGN IN</Button>
             {biometricAvailable && (
