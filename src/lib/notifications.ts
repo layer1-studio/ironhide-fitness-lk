@@ -1,19 +1,21 @@
-import { getToken } from 'firebase/messaging';
-import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { getToken, onMessage } from 'firebase/messaging';
+import { doc, updateDoc } from 'firebase/firestore';
 import { messaging, db } from './firebase';
 
-export async function requestNotificationPermission(uid: string): Promise<void> {
+export async function registerFCMToken(uid: string): Promise<void> {
   try {
-    const messagingInstance = await messaging;
-    if (!messagingInstance) return;
+    const m = await messaging;
+    if (!m) return;
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') return;
-    const token = await getToken(messagingInstance, {
-      vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY,
-    });
+    const token = await getToken(m, { vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY });
     if (!token) return;
-    await updateDoc(doc(db, 'members', uid), { fcmTokens: arrayUnion(token) });
-  } catch {
-    // Notifications not supported or blocked
-  }
+    await updateDoc(doc(db, 'members', uid), { fcmToken: token });
+  } catch { /* not supported */ }
+}
+
+export async function onForegroundMessage(callback: (payload: { notification?: { title?: string; body?: string } }) => void): Promise<(() => void) | undefined> {
+  const m = await messaging;
+  if (!m) return;
+  return onMessage(m, callback);
 }

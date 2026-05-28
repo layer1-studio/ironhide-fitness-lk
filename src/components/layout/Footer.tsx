@@ -19,6 +19,7 @@ export function Footer() {
           <Link to="/facilities" className="text-body-md text-on-surface-variant hover:text-on-surface transition-colors font-body">Facilities</Link>
           <Link to="/membership" className="text-body-md text-on-surface-variant hover:text-on-surface transition-colors font-body">Plans</Link>
           <Link to="/contact" className="text-body-md text-on-surface-variant hover:text-on-surface transition-colors font-body">Contact</Link>
+          <Link to="/announcements" className="text-body-md text-on-surface-variant hover:text-on-surface transition-colors font-body">News</Link>
           <Link to="/login" className="text-body-md text-on-surface-variant hover:text-on-surface transition-colors font-body">Member Login</Link>
         </div>
       </div>

@@ -19,11 +19,12 @@ export function Navbar() {
     { to: '/facilities', label: 'Facilities' },
     { to: '/membership', label: 'Plans' },
     { to: '/occupancy', label: 'Gym Status' },
+    { to: '/announcements', label: 'News' },
     { to: '/contact', label: 'Contact' },
   ];
 
   return (
-    <header className="sticky top-0 z-50 border-b border-surface-container-highest bg-surface">
+    <header className="sticky top-0 z-50 border-b border-surface-container-highest bg-surface" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
       <div className="flex justify-between items-center w-full px-margin-mobile md:px-margin-desktop py-4 max-w-container mx-auto">
         <Link to="/" className="font-display text-headline-md text-on-surface uppercase tracking-wider">IRONHIDE</Link>
 

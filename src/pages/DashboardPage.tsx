@@ -8,6 +8,7 @@ import { formatDate } from '../lib/utils';
 import { useEffect, useState } from 'react';
 import { getNotifications } from '../lib/memberService';
 import { useAuth } from '../hooks/useAuth';
+import { registerFCMToken } from '../lib/notifications';
 import type { Notification } from '../types';
 
 function DashboardContent() {
@@ -16,9 +17,9 @@ function DashboardContent() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
   useEffect(() => {
-    if (user) {
-      getNotifications(user.uid).then(n => setNotifications(n.slice(0, 5))).catch(() => {});
-    }
+    if (!user) return;
+    getNotifications(user.uid).then(n => setNotifications(n.slice(0, 5))).catch(() => {});
+    registerFCMToken(user.uid).catch(() => {});
   }, [user]);
 
   if (loading) {
@@ -106,7 +107,10 @@ function DashboardContent() {
 
         {/* Notifications */}
         <div className="md:col-span-12 bg-surface-container border-t-2 border-primary-container p-6">
-          <h4 className="font-display text-headline-md uppercase mb-4">Notifications</h4>
+          <div className="flex justify-between items-center mb-4">
+            <h4 className="font-display text-headline-md uppercase">Notifications</h4>
+            <Link to="/announcements" className="font-label-sm text-label-sm text-primary-container hover:underline uppercase">View All</Link>
+          </div>
           {notifications.length === 0 ? (
             <p className="text-body-md text-on-surface-variant font-body">No new notifications.</p>
           ) : (

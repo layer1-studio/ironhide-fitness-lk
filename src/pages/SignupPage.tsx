@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { initiatePayHerePayment } from '../lib/payhere';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { auth, storage } from '../lib/firebase';
 import { createMember, addPayment, getMembershipPlans } from '../lib/memberService';
@@ -96,6 +97,20 @@ export default function SignupPage() {
     setLoading(true);
     setSubmitError('');
     try {
+      if (paymentMethod === 'card') {
+        initiatePayHerePayment({
+          orderId: `IH-${Date.now()}`,
+          amount: selectedPlan?.price ?? 0,
+          currency: 'LKR',
+          itemName: `IronHide ${selectedPlan?.name ?? 'Membership'}`,
+          firstName: personal.fullName.split(' ')[0] ?? '',
+          lastName: personal.fullName.split(' ').slice(1).join(' ') ?? '',
+          email: personal.email,
+          phone: personal.phone,
+        });
+        setLoading(false);
+        return;
+      }
       const userCred = await createUserWithEmailAndPassword(auth, personal.email, personal.password);
       const uid = userCred.user.uid;
 
@@ -134,7 +149,7 @@ export default function SignupPage() {
         photoUrl,
         lockerNumber: '',
         membershipTier: selectedPlan?.name ?? '',
-        membershipStatus: paymentMethod === 'card' ? 'pending_verification' : paymentMethod === 'bank_transfer' ? 'pending_verification' : 'pending_cash',
+        membershipStatus: paymentMethod === 'bank_transfer' ? 'pending_verification' : 'pending_cash',
         membershipExpiry: expiry,
       });
 
@@ -243,6 +258,15 @@ export default function SignupPage() {
                   <input type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
                 </label>
                 {photoFile && <p className="text-label-sm text-on-surface-variant font-body">{photoFile.name}</p>}
+              </div>
+              {/* Face Recognition Enrollment */}
+              <div className="border border-border-default p-4 space-y-3">
+                <p className="font-label-sm text-label-sm text-primary-container uppercase tracking-widest">Face Recognition Entry</p>
+                <p className="font-body text-body-md text-on-surface-variant">Your profile photo will be used to enroll you in the gym's face recognition entry system.</p>
+                <div className="flex items-center gap-2 text-on-surface-variant">
+                  <span className="material-symbols-outlined text-sm">schedule</span>
+                  <p className="font-label-sm text-label-sm uppercase tracking-widest">Enrollment processed after membership activation</p>
+                </div>
               </div>
             </div>
           )}

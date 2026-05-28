@@ -7,7 +7,7 @@ export default function LandingPage() {
   return (
     <PageWrapper>
       {/* Hero */}
-      <section className="relative h-screen w-full flex items-center overflow-hidden">
+      <section className="relative h-screen w-full flex items-start pt-16 overflow-hidden">
         <div className="absolute inset-0 z-0">
           <img src={GYM_IMAGE} alt="IronHide Gym" className="w-full h-full object-cover" />
           <div className="absolute inset-0" style={{ background: 'linear-gradient(0deg, rgba(0,0,0,1) 0%, rgba(0,0,0,0.4) 50%, rgba(0,0,0,0.8) 100%)' }} />
@@ -27,7 +27,23 @@ export default function LandingPage() {
             </Link>
           </div>
         </div>
+
+        {/* Scroll indicator */}
+        <div className="absolute bottom-8 left-0 right-0 flex flex-col items-center gap-2 z-10">
+          <span className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-widest">Explore</span>
+          <div className="flex flex-col items-center gap-1">
+            <span className="material-symbols-outlined text-on-surface-variant" style={{ animation: 'bounce 1.5s infinite' }}>keyboard_arrow_down</span>
+            <span className="material-symbols-outlined text-primary-container opacity-70" style={{ animation: 'bounce 1.5s infinite 0.2s' }}>keyboard_arrow_down</span>
+          </div>
+        </div>
       </section>
+
+      <style>{`
+        @keyframes bounce {
+          0%, 100% { transform: translateY(0); opacity: 0.4; }
+          50% { transform: translateY(6px); opacity: 1; }
+        }
+      `}</style>
 
       {/* Stats Strip */}
       <section className="py-section-gap px-margin-mobile md:px-margin-desktop max-w-container mx-auto">

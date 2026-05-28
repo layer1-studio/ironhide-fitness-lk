@@ -81,3 +81,29 @@ export const updateOccupancy = functions.https.onCall(async (data, _context) => 
     tx.set(ref, { count: next, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
   });
 });
+
+// 5. Capacity threshold alert (called by face recognition system)
+export const onCapacityThreshold = functions.firestore
+  .document('gym_meta/occupancy')
+  .onUpdate(async (change) => {
+    const before: number = change.before.data().count ?? 0;
+    const after: number = change.after.data().count ?? 0;
+    const capacity = 50;
+    const threshold = Math.floor(capacity * 0.9);
+    if (before < threshold && after >= threshold) {
+      const membersSnap = await db.collection('members').where('membershipStatus', '==', 'active').get();
+      const allTokens: string[] = [];
+      membersSnap.docs.forEach(d => {
+        const t: string = d.data().fcmToken;
+        if (t) allTokens.push(t);
+      });
+      if (!allTokens.length) return;
+      // Send in batches of 500
+      for (let i = 0; i < allTokens.length; i += 500) {
+        await admin.messaging().sendEachForMulticast({
+          tokens: allTokens.slice(i, i + 500),
+          notification: { title: 'IronHide is at capacity', body: 'The gym is almost full right now. Consider visiting later for a better experience.' },
+        });
+      }
+    }
+  });

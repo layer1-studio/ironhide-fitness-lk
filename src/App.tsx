@@ -15,6 +15,7 @@ import ProfilePage from './pages/ProfilePage';
 import IdCardPage from './pages/IdCardPage';
 import OccupancyPage from './pages/OccupancyPage';
 import FitnessPage from './pages/FitnessPage';
+import AnnouncementsPage from './pages/AnnouncementsPage';
 
 export default function App() {
   return (
@@ -36,6 +37,7 @@ export default function App() {
             <Route path="/id-card" element={<IdCardPage />} />
             <Route path="/occupancy" element={<OccupancyPage />} />
             <Route path="/fitness" element={<FitnessPage />} />
+            <Route path="/announcements" element={<AnnouncementsPage />} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>

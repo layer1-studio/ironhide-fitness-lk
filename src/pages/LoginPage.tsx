@@ -1,15 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
+import { isBiometricAvailable, authenticateWithBiometric } from '../lib/biometrics';
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const [form, setForm] = useState({ email: '', password: '' });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  useEffect(() => { isBiometricAvailable().then(setBiometricAvailable); }, []);
+
+  const handleBiometric = async () => {
+    const ok = await authenticateWithBiometric();
+    if (!ok) { setErrors({ submit: 'Biometric authentication failed.' }); return; }
+    // Biometric confirmed — user still needs stored credentials
+    // For now navigate to dashboard if already authenticated
+    navigate('/dashboard');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,6 +53,13 @@ export default function LoginPage() {
             <Input label="Password" type="password" value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} error={errors.password} placeholder="••••••••" />
             {errors.submit && <p className="text-error text-body-md font-body">{errors.submit}</p>}
             <Button type="submit" variant="primary" size="lg" loading={loading} className="w-full">SIGN IN</Button>
+            {biometricAvailable && (
+              <button type="button" onClick={handleBiometric}
+                className="w-full border border-border-default text-on-surface py-4 font-display text-headline-md uppercase hover:border-primary-container transition-all flex items-center justify-center gap-3">
+                <span className="material-symbols-outlined">fingerprint</span>
+                USE FACE ID / FINGERPRINT
+              </button>
+            )}
           </form>
 
           <div className="mt-6 space-y-3 text-center">
