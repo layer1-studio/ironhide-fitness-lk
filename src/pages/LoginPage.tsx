@@ -32,7 +32,8 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, form.email, form.password);
+      console.log('[Login] email:', JSON.stringify(form.email), 'pw length:', form.password.length);
+      await signInWithEmailAndPassword(auth, form.email.trim(), form.password);
       navigate('/dashboard');
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code ?? 'unknown';
@@ -51,7 +52,7 @@ export default function LoginPage() {
           <p className="text-body-md text-on-surface-variant font-body mb-8">Welcome back. Access your portal below.</p>
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            <Input label="Email Address" type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} error={errors.email} placeholder="your@email.com" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
+            <Input label="Email Address" type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} error={errors.email} placeholder="your@email.com" autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="username" />
             <div className="flex flex-col gap-1">
               <label className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-widest">Password</label>
               <div className="relative">
@@ -63,11 +64,16 @@ export default function LoginPage() {
                   autoCapitalize="none"
                   autoCorrect="off"
                   spellCheck={false}
+                  autoComplete="current-password"
                   className={`w-full bg-surface-container border text-on-surface px-4 py-3 pr-12 focus:outline-none focus:border-primary-container placeholder:text-on-surface-variant ${errors.password ? 'border-error' : 'border-border-default'}`}
                 />
                 <button type="button" onClick={() => setShowPassword(p => !p)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface">
-                  <span className="material-symbols-outlined text-xl">{showPassword ? 'visibility_off' : 'visibility'}</span>
+                  {showPassword ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  )}
                 </button>
               </div>
               {errors.password && <span className="text-error text-label-sm">{errors.password}</span>}
