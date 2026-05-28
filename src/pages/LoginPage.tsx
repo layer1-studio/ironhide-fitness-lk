@@ -12,6 +12,7 @@ export default function LoginPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   useEffect(() => { isBiometricAvailable().then(setBiometricAvailable); }, []);
 
   const handleBiometric = async () => {
@@ -33,8 +34,9 @@ export default function LoginPage() {
     try {
       await signInWithEmailAndPassword(auth, form.email, form.password);
       navigate('/dashboard');
-    } catch {
-      setErrors({ submit: 'Invalid email or password. Please try again.' });
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code ?? 'unknown';
+      setErrors({ submit: `Error: ${code}` });
     } finally {
       setLoading(false);
     }
@@ -50,7 +52,27 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <Input label="Email Address" type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} error={errors.email} placeholder="your@email.com" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
-            <Input label="Password" type="password" value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} error={errors.password} placeholder="••••••••" autoCapitalize="none" autoCorrect="off" spellCheck={false} />
+            <div className="flex flex-col gap-1">
+              <label className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-widest">Password</label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={form.password}
+                  onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
+                  placeholder="••••••••"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  className={`w-full bg-surface-container border text-on-surface px-4 py-3 pr-12 focus:outline-none focus:border-primary-container placeholder:text-on-surface-variant ${errors.password ? 'border-error' : 'border-border-default'}`}
+                />
+                <button type="button" onClick={() => setShowPassword(p => !p)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface">
+                  <span className="material-symbols-outlined text-xl">{showPassword ? 'visibility_off' : 'visibility'}</span>
+                </button>
+              </div>
+              {errors.password && <span className="text-error text-label-sm">{errors.password}</span>}
+              <Link to="/forgot-password" className="text-primary-container text-label-sm font-label-sm hover:underline self-end mt-1">Forgot password?</Link>
+            </div>
             {errors.submit && <p className="text-error text-body-md font-body">{errors.submit}</p>}
             <Button type="submit" variant="primary" size="lg" loading={loading} className="w-full">SIGN IN</Button>
             {biometricAvailable && (
