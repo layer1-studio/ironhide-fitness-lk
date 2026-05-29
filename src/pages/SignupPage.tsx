@@ -40,7 +40,7 @@ export default function SignupPage() {
   const [plans, setPlans] = useState<MembershipPlan[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const [personal, setPersonal] = useState({ fullName: '', dob: '', gender: '', phone: '', email: '', password: '', address: '', emergencyName: '', emergencyPhone: '' });
+  const [personal, setPersonal] = useState({ fullName: '', dob: '', gender: '', phone: '', email: '', password: '', confirmPassword: '', address: '', emergencyName: '', emergencyPhone: '' });
   const [health, setHealth] = useState({ height: '', weight: '', medicalConditions: '', medications: '', injuries: '' });
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState('');
@@ -90,6 +90,8 @@ export default function SignupPage() {
       else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(personal.email)) errs.email = 'Enter a valid email address';
       if (!personal.password) errs.password = 'Password is required';
       else if (personal.password.length < 6) errs.password = 'Password must be at least 6 characters';
+      if (!personal.confirmPassword) errs.confirmPassword = 'Please confirm your password';
+      else if (personal.password !== personal.confirmPassword) errs.confirmPassword = 'Passwords do not match';
       if (!personal.address.trim()) errs.address = 'Home address is required';
     }
     if (step === 3 && !selectedPlan) errs.plan = 'Please select a membership plan';
@@ -242,6 +244,7 @@ export default function SignupPage() {
                 <Input label="Phone Number" value={personal.phone} onChange={e => setPersonal(p => ({ ...p, phone: e.target.value }))} error={errors.phone} placeholder="07X XXX XXXX" />
                 <Input label="Email Address" type="email" value={personal.email} onChange={e => setPersonal(p => ({ ...p, email: e.target.value }))} error={errors.email} placeholder="you@email.com" />
                 <Input label="Password" type="password" value={personal.password} onChange={e => setPersonal(p => ({ ...p, password: e.target.value }))} error={errors.password} placeholder="Min 6 characters" autoComplete="new-password" autoCapitalize="none" autoCorrect="off" />
+                <Input label="Confirm Password" type="password" value={personal.confirmPassword} onChange={e => setPersonal(p => ({ ...p, confirmPassword: e.target.value }))} error={errors.confirmPassword} placeholder="Re-enter password" autoComplete="new-password" autoCapitalize="none" autoCorrect="off" />
               </div>
               <Input label="Home Address" value={personal.address} onChange={e => setPersonal(p => ({ ...p, address: e.target.value }))} error={errors.address} placeholder="Street, City" />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
