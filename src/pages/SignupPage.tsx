@@ -49,6 +49,7 @@ export default function SignupPage() {
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [submitError, setSubmitError] = useState('');
   const [completed, setCompleted] = useState(false);
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
 
   const bmi = health.height && health.weight ? calculateBMI(Number(health.height), Number(health.weight)) : 0;
 
@@ -120,6 +121,7 @@ export default function SignupPage() {
   };
 
   const handleComplete = async () => {
+    if (!privacyAccepted) { setSubmitError('Please accept the data privacy statement to continue.'); return; }
     if (!paymentMethod) { setSubmitError('Please select a payment method.'); return; }
     if (paymentMethod === 'bank_transfer' && !receiptFile) { setSubmitError('Please upload your bank transfer receipt.'); return; }
     setLoading(true);
@@ -387,6 +389,31 @@ export default function SignupPage() {
                   <p className="text-body-md font-body text-yellow-400">Please make payment at the gym reception at 114C Negombo Rd, Wattala. Your membership will be activated once payment is confirmed.</p>
                 </div>
               )}
+
+              {/* Data Privacy Statement */}
+              <div className="border border-border-default p-4 space-y-3">
+                <p className="font-label-sm text-label-sm text-primary-container uppercase tracking-widest">Data Privacy Statement</p>
+                <p className="font-body text-body-md text-on-surface-variant">
+                  IronHide Fitness collects and stores your personal information (name, contact details, date of birth, health data, and profile photo) solely for the purpose of managing your gym membership, ensuring your safety during training, and communicating gym updates with you.
+                </p>
+                <p className="font-body text-body-md text-on-surface-variant">
+                  Your data is stored securely and will not be shared with third parties without your consent, except where required by law. You may request access to, correction of, or deletion of your data at any time by contacting the gym management.
+                </p>
+                <p className="font-body text-body-md text-on-surface-variant">
+                  Health information (medical conditions, medications, injuries) is collected to protect your safety and will only be accessed by authorised staff. By registering, you consent to this data being held for the duration of your membership and for a period of 2 years thereafter.
+                </p>
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={privacyAccepted}
+                    onChange={e => setPrivacyAccepted(e.target.checked)}
+                    className="mt-1 accent-[#cc0000] w-4 h-4 shrink-0"
+                  />
+                  <span className="font-body text-body-md text-on-surface">
+                    I have read and agree to the data privacy statement. I consent to IronHide Fitness collecting and storing my personal and health information as described above.
+                  </span>
+                </label>
+              </div>
 
               {submitError && <p className="text-error text-body-md font-body">{submitError}</p>}
             </div>
