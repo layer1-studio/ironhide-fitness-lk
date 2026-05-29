@@ -68,7 +68,7 @@ export default function VerifyEmailPage() {
             <span className="text-on-surface font-bold">{user?.email}</span>
           </p>
           <p className="font-body text-body-md text-on-surface-variant">
-            Check your inbox and click the link to activate your account. Once verified, press the button below.
+            Click the link in the email to activate your account, then press the button below. If you don't see it, <span className="text-on-surface font-bold">check your spam or junk folder</span>.
           </p>
 
           {error && <p className="text-error text-body-md font-body">{error}</p>}
