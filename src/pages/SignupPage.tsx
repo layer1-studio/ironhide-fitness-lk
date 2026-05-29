@@ -241,7 +241,7 @@ export default function SignupPage() {
                 </div>
                 <Input label="Phone Number" value={personal.phone} onChange={e => setPersonal(p => ({ ...p, phone: e.target.value }))} error={errors.phone} placeholder="07X XXX XXXX" />
                 <Input label="Email Address" type="email" value={personal.email} onChange={e => setPersonal(p => ({ ...p, email: e.target.value }))} error={errors.email} placeholder="you@email.com" />
-                <Input label="Password" type="password" value={personal.password} onChange={e => setPersonal(p => ({ ...p, password: e.target.value }))} error={errors.password} placeholder="Min 6 characters" />
+                <Input label="Password" type="password" value={personal.password} onChange={e => setPersonal(p => ({ ...p, password: e.target.value }))} error={errors.password} placeholder="Min 6 characters" autoComplete="new-password" autoCapitalize="none" autoCorrect="off" />
               </div>
               <Input label="Home Address" value={personal.address} onChange={e => setPersonal(p => ({ ...p, address: e.target.value }))} error={errors.address} placeholder="Street, City" />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
