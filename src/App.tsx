@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { ScrollToTop } from './components/ScrollToTop';
 import LandingPage from './pages/LandingPage';
 import FacilitiesPage from './pages/FacilitiesPage';
 import MembershipPage from './pages/MembershipPage';
@@ -24,6 +25,7 @@ export default function App() {
     <ErrorBoundary>
       <AuthProvider>
         <BrowserRouter basename={import.meta.env.BASE_URL}>
+          <ScrollToTop />
           <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route path="/facilities" element={<FacilitiesPage />} />
