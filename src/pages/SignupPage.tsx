@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
 import { initiatePayHerePayment } from '../lib/payhere';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { auth, storage } from '../lib/firebase';
@@ -72,7 +72,33 @@ export default function SignupPage() {
     }
   };
 
+  const validateStep = (): Record<string, string> => {
+    const errs: Record<string, string> = {};
+    if (step === 0) {
+      if (!personal.fullName.trim()) errs.fullName = 'Full name is required';
+      else if (personal.fullName.trim().length < 2) errs.fullName = 'Enter your full name';
+      if (!personal.dob) errs.dob = 'Date of birth is required';
+      else {
+        const age = (Date.now() - new Date(personal.dob).getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+        if (age < 16) errs.dob = 'You must be at least 16 years old';
+        if (age > 100) errs.dob = 'Please enter a valid date of birth';
+      }
+      if (!personal.gender) errs.gender = 'Please select a gender';
+      if (!personal.phone.trim()) errs.phone = 'Phone number is required';
+      else if (!/^0\d{9}$/.test(personal.phone.replace(/\s/g, ''))) errs.phone = 'Enter a valid Sri Lanka number (07X XXXXXXX)';
+      if (!personal.email.trim()) errs.email = 'Email is required';
+      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(personal.email)) errs.email = 'Enter a valid email address';
+      if (!personal.password) errs.password = 'Password is required';
+      else if (personal.password.length < 6) errs.password = 'Password must be at least 6 characters';
+      if (!personal.address.trim()) errs.address = 'Home address is required';
+    }
+    if (step === 3 && !selectedPlan) errs.plan = 'Please select a membership plan';
+    return errs;
+  };
+
   const nextStep = async () => {
+    const errs = validateStep();
+    if (Object.keys(errs).length) { setErrors(errs); return; }
     if (step === 3 && !plans.length) await loadPlans();
     setStep(s => s + 1);
     setErrors({});
@@ -113,6 +139,7 @@ export default function SignupPage() {
       }
       const userCred = await createUserWithEmailAndPassword(auth, personal.email, personal.password);
       const uid = userCred.user.uid;
+      await sendEmailVerification(userCred.user).catch(() => {});
 
       let photoUrl = '';
       if (photoFile) {
@@ -162,6 +189,7 @@ export default function SignupPage() {
       });
 
       setCompleted(true);
+      navigate('/verify-email');
     } catch {
       setSubmitError('Registration failed. The email may already be in use, or try again later.');
     } finally {
@@ -203,12 +231,13 @@ export default function SignupPage() {
                 <Input label="Date of Birth" type="date" value={personal.dob} onChange={e => setPersonal(p => ({ ...p, dob: e.target.value }))} error={errors.dob} />
                 <div className="flex flex-col gap-1">
                   <label className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-widest">Gender</label>
-                  <select value={personal.gender} onChange={e => setPersonal(p => ({ ...p, gender: e.target.value }))} className="bg-surface-container border border-border-default text-on-surface px-4 py-3 focus:outline-none focus:border-primary-container">
+                  <select value={personal.gender} onChange={e => setPersonal(p => ({ ...p, gender: e.target.value }))} className={`bg-surface-container border text-on-surface px-4 py-3 focus:outline-none focus:border-primary-container ${errors.gender ? 'border-error' : 'border-border-default'}`}>
                     <option value="">Select gender</option>
                     <option value="male">Male</option>
                     <option value="female">Female</option>
                     <option value="other">Other</option>
                   </select>
+                  {errors.gender && <span className="text-error text-label-sm">{errors.gender}</span>}
                 </div>
                 <Input label="Phone Number" value={personal.phone} onChange={e => setPersonal(p => ({ ...p, phone: e.target.value }))} error={errors.phone} placeholder="07X XXX XXXX" />
                 <Input label="Email Address" type="email" value={personal.email} onChange={e => setPersonal(p => ({ ...p, email: e.target.value }))} error={errors.email} placeholder="you@email.com" />
@@ -274,6 +303,7 @@ export default function SignupPage() {
           {step === 3 && (
             <div className="space-y-6">
               <h2 className="font-display text-headline-md uppercase">Choose Your Plan</h2>
+              {errors.plan && <p className="text-error text-body-md font-body">{errors.plan}</p>}
               {plansLoading ? (
                 <div className="flex justify-center py-8"><Spinner /></div>
               ) : (

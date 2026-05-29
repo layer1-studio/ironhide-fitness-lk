@@ -15,5 +15,6 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   }
 
   if (!user) return <Navigate to="/login" replace />;
+  if (!user.emailVerified) return <Navigate to="/verify-email" replace />;
   return <>{children}</>;
 }

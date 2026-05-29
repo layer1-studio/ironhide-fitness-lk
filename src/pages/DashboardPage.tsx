@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { PageWrapper } from '../components/layout/PageWrapper';
 import { AuthGuard } from '../components/layout/AuthGuard';
 import { Badge } from '../components/ui/Badge';
-import { Spinner } from '../components/ui/Spinner';
+import { DashboardSkeleton } from '../components/ui/Skeleton';
 import { useMember } from '../hooks/useMember';
 import { formatDate } from '../lib/utils';
 import { useEffect, useState } from 'react';
@@ -22,9 +22,7 @@ function DashboardContent() {
     registerFCMToken(user.uid).catch(() => {});
   }, [user]);
 
-  if (loading) {
-    return <div className="flex justify-center py-24"><Spinner size="lg" /></div>;
-  }
+  if (loading) return <DashboardSkeleton />;
 
   return (
     <div className="max-w-container mx-auto px-margin-mobile md:px-margin-desktop py-12">
@@ -112,7 +110,10 @@ function DashboardContent() {
             <Link to="/announcements" className="font-label-sm text-label-sm text-primary-container hover:underline uppercase">View All</Link>
           </div>
           {notifications.length === 0 ? (
-            <p className="text-body-md text-on-surface-variant font-body">No new notifications.</p>
+            <div className="flex flex-col items-center gap-3 py-8 text-center">
+              <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-on-surface-variant opacity-40"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+              <p className="text-body-md text-on-surface-variant font-body">No notifications yet.</p>
+            </div>
           ) : (
             <div className="space-y-4">
               {notifications.map(n => (

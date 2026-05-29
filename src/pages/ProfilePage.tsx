@@ -8,7 +8,6 @@ import { AuthGuard } from '../components/layout/AuthGuard';
 import { Input } from '../components/ui/Input';
 import { Textarea } from '../components/ui/Textarea';
 import { Button } from '../components/ui/Button';
-import { Spinner } from '../components/ui/Spinner';
 import { useAuth } from '../hooks/useAuth';
 import type { Member } from '../types';
 
@@ -88,7 +87,23 @@ function ProfileContent() {
     }
   };
 
-  if (loading) return <div className="flex justify-center py-24"><Spinner size="lg" /></div>;
+  if (loading) return (
+    <div className="max-w-container mx-auto px-margin-mobile md:px-margin-desktop py-12 animate-pulse">
+      <div className="h-10 w-48 bg-surface-container-high mb-4" />
+      <div className="h-1 w-24 bg-surface-container-high mb-12" />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+        <div className="flex flex-col items-center gap-6">
+          <div className="w-48 h-48 bg-surface-container-high" />
+          <div className="h-9 w-32 bg-surface-container-high" />
+        </div>
+        <div className="md:col-span-2 space-y-6">
+          <div className="grid grid-cols-2 gap-6"><div className="h-14 bg-surface-container-high" /><div className="h-14 bg-surface-container-high" /></div>
+          <div className="h-14 bg-surface-container-high" />
+          <div className="grid grid-cols-2 gap-6"><div className="h-14 bg-surface-container-high" /><div className="h-14 bg-surface-container-high" /></div>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="max-w-container mx-auto px-margin-mobile md:px-margin-desktop py-12">

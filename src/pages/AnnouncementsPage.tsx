@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { collection, getDocs, orderBy, query } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { PageWrapper } from '../components/layout/PageWrapper';
-import { Spinner } from '../components/ui/Spinner';
 import { formatDate } from '../lib/utils';
 
 interface Announcement {
@@ -38,7 +37,23 @@ export default function AnnouncementsPage() {
       <div className="max-w-container mx-auto px-margin-mobile md:px-margin-desktop py-12">
         <h1 className="font-display text-headline-lg uppercase mb-4">ANNOUNCEMENTS</h1>
         <div className="w-24 h-1 bg-primary-container mb-12" />
-        {loading ? <div className="flex justify-center py-12"><Spinner /></div> : (
+        {loading ? (
+          <div className="space-y-4">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="bg-surface-container p-6 space-y-3 animate-pulse">
+                <div className="flex justify-between"><div className="h-6 w-48 bg-surface-container-high" /><div className="h-4 w-24 bg-surface-container-high" /></div>
+                <div className="h-4 w-full bg-surface-container-high" />
+                <div className="h-4 w-3/4 bg-surface-container-high" />
+              </div>
+            ))}
+          </div>
+        ) : items.length === 0 ? (
+          <div className="flex flex-col items-center gap-4 py-20 text-center">
+            <svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-on-surface-variant opacity-40"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <h3 className="font-display text-headline-md uppercase">No Announcements</h3>
+            <p className="text-body-lg text-on-surface-variant font-body">Check back soon for updates from IronHide.</p>
+          </div>
+        ) : (
           <div className="space-y-4">
             {items.map(item => {
               const cfg = typeConfig[item.type] ?? typeConfig.info;

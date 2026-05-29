@@ -8,6 +8,7 @@ import ContactPage from './pages/ContactPage';
 import LoginPage from './pages/LoginPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import SignupPage from './pages/SignupPage';
+import VerifyEmailPage from './pages/VerifyEmailPage';
 import DashboardPage from './pages/DashboardPage';
 import RenewPage from './pages/RenewPage';
 import PaymentsPage from './pages/PaymentsPage';
@@ -16,6 +17,7 @@ import IdCardPage from './pages/IdCardPage';
 import OccupancyPage from './pages/OccupancyPage';
 import FitnessPage from './pages/FitnessPage';
 import AnnouncementsPage from './pages/AnnouncementsPage';
+import NotFoundPage from './pages/NotFoundPage';
 
 export default function App() {
   return (
@@ -30,6 +32,7 @@ export default function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/signup" element={<SignupPage />} />
+            <Route path="/verify-email" element={<VerifyEmailPage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/renew" element={<RenewPage />} />
             <Route path="/payments" element={<PaymentsPage />} />
@@ -38,6 +41,7 @@ export default function App() {
             <Route path="/occupancy" element={<OccupancyPage />} />
             <Route path="/fitness" element={<FitnessPage />} />
             <Route path="/announcements" element={<AnnouncementsPage />} />
+            <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </BrowserRouter>
       </AuthProvider>

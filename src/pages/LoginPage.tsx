@@ -32,12 +32,16 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      console.log('[Login] email:', JSON.stringify(form.email), 'pw length:', form.password.length);
       await signInWithEmailAndPassword(auth, form.email.trim(), form.password);
       navigate('/dashboard');
     } catch (err: unknown) {
-      const code = (err as { code?: string })?.code ?? 'unknown';
-      setErrors({ submit: `Error: ${code}` });
+      const code = (err as { code?: string })?.code ?? '';
+      const msg = code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found'
+        ? 'Incorrect email or password. Please try again.'
+        : code === 'auth/too-many-requests'
+          ? 'Too many attempts. Please wait and try again.'
+          : 'Sign in failed. Please try again.';
+      setErrors({ submit: msg });
     } finally {
       setLoading(false);
     }
