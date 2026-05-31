@@ -410,7 +410,11 @@ export default function SignupPage() {
                     className="mt-1 accent-[#cc0000] w-4 h-4 shrink-0"
                   />
                   <span className="font-body text-body-md text-on-surface">
-                    I have read and agree to the data privacy statement. I consent to IronHide Fitness collecting and storing my personal and health information as described above.
+                    I have read and agree to the{' '}
+                    <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-primary-container hover:underline">Terms & Conditions</a>
+                    {' '}and{' '}
+                    <a href="/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-primary-container hover:underline">Privacy Policy</a>.
+                    {' '}I consent to IronHide Fitness collecting and processing my personal and health data as described.
                   </span>
                 </label>
               </div>

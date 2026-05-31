@@ -18,6 +18,12 @@ import IdCardPage from './pages/IdCardPage';
 import OccupancyPage from './pages/OccupancyPage';
 import FitnessPage from './pages/FitnessPage';
 import AnnouncementsPage from './pages/AnnouncementsPage';
+import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
+import TermsPage from './pages/TermsPage';
+import CookiePolicyPage from './pages/CookiePolicyPage';
+import RefundPolicyPage from './pages/RefundPolicyPage';
+import HelpPage from './pages/HelpPage';
+import SettingsPage from './pages/SettingsPage';
 import NotFoundPage from './pages/NotFoundPage';
 
 export default function App() {
@@ -43,6 +49,12 @@ export default function App() {
             <Route path="/occupancy" element={<OccupancyPage />} />
             <Route path="/fitness" element={<FitnessPage />} />
             <Route path="/announcements" element={<AnnouncementsPage />} />
+            <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+            <Route path="/terms" element={<TermsPage />} />
+            <Route path="/cookie-policy" element={<CookiePolicyPage />} />
+            <Route path="/refund-policy" element={<RefundPolicyPage />} />
+            <Route path="/help" element={<HelpPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </BrowserRouter>

@@ -100,6 +100,10 @@ function DashboardContent() {
               <span className="material-symbols-outlined">fitness_center</span>
               Fitness Log
             </Link>
+            <Link to="/settings" className="w-full border border-surface-container-highest text-on-surface font-display text-[20px] py-4 uppercase hover:bg-surface-container-high transition-all flex items-center justify-center gap-3">
+              <span className="material-symbols-outlined">settings</span>
+              Settings
+            </Link>
           </div>
         </div>
 
