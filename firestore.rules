@@ -1,0 +1,38 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Members can read/write their own document and all sub-collections
+    match /members/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+
+      match /{subcollection}/{docId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+    }
+
+    // Announcements — public read
+    match /announcements/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Membership plans — public read
+    match /membershipPlans/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Contact enquiries — anyone can create
+    match /contactEnquiries/{id} {
+      allow create: if true;
+      allow read, update, delete: if false;
+    }
+
+    // Gym occupancy — public read
+    match /gym_meta/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+  }
+}
