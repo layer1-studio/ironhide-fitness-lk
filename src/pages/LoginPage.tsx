@@ -32,7 +32,13 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, form.email.trim(), form.password);
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject({ code: 'auth/network-timeout' }), 15000)
+      );
+      await Promise.race([
+        signInWithEmailAndPassword(auth, form.email.trim(), form.password),
+        timeout,
+      ]);
       navigate('/dashboard');
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code ?? '';
@@ -40,7 +46,9 @@ export default function LoginPage() {
         ? 'Incorrect email or password. Please try again.'
         : code === 'auth/too-many-requests'
           ? 'Too many attempts. Please wait and try again.'
-          : 'Sign in failed. Please try again.';
+          : code === 'auth/network-request-failed' || code === 'auth/network-timeout'
+            ? 'Network error. Check your connection and try again.'
+            : 'Sign in failed. Please try again.';
       setErrors({ submit: msg });
     } finally {
       setLoading(false);
