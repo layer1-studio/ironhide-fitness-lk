@@ -108,8 +108,7 @@ export function subscribeAllPayments(callback: (payments: AdminPayment[]) => voi
 
 export async function setPaymentStatus(uid: string, paymentId: string, status: 'confirmed' | 'rejected', rejectionNote?: string): Promise<void> {
   const paymentRef = doc(db, 'members', uid, 'payments', paymentId);
-  const paymentSnap = await getDoc(paymentRef);
-  const paymentData = paymentSnap.exists() ? (paymentSnap.data() as Record<string, unknown> | undefined) : undefined;
+  await getDoc(paymentRef);
 
   if (status === 'rejected') {
     await updateDoc(paymentRef, {
