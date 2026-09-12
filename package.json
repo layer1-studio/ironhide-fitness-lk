@@ -28,6 +28,7 @@
     "nodemailer": "^9.0.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-is": "^19.3.0",
     "react-router-dom": "^6.21.0",
     "recharts": "^3.9.2"
   },
