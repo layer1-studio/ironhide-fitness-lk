@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { createUserWithEmailAndPassword, sendEmailVerification, deleteUser } from 'firebase/auth';
 import { initiateStripeCheckout } from '../lib/stripe';
+import { initiateHnbCheckout } from '../lib/hnbipg';
+import { ReCaptcha } from '../components/ui/ReCaptcha';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { auth, storage } from '../lib/firebase';
 import { db } from '../lib/firebase';
@@ -62,8 +64,9 @@ export default function SignupPage() {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState('');
   const [selectedPlan, setSelectedPlan] = useState<MembershipPlan | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'card' | 'bank_transfer' | 'cash' | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'bank_transfer' | 'cash' | 'hnb_ipg' | null>(null);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [recaptchaToken, setRecaptchaToken] = useState('');
   const [submitError, setSubmitError] = useState('');
   const [completed, setCompleted] = useState(false);
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
@@ -163,6 +166,7 @@ export default function SignupPage() {
     if (!privacyAccepted) { setSubmitError('Please accept the data privacy statement to continue.'); return; }
     if (!paymentMethod) { setSubmitError('Please select a payment method.'); return; }
     if (paymentMethod === 'bank_transfer' && !receiptFile) { setSubmitError('Please upload your bank transfer receipt.'); return; }
+    if (paymentMethod === 'hnb_ipg' && !recaptchaToken) { setSubmitError('Please complete the security check (reCAPTCHA) before proceeding.'); return; }
 
     setLoading(true);
     setSubmitError('');
@@ -253,6 +257,55 @@ export default function SignupPage() {
           } else {
             throw new Error(stripeErr?.message || 'Failed to initiate payment. Please check your connection and try again.');
           }
+        }
+      }
+       // Card Payment — HNB IPG (CyberSource)
+      if (paymentMethod === 'hnb_ipg') {
+        try {
+          if (!selectedPlan) throw new Error('No membership plan selected');
+
+          await createMember(uid, {
+            fullName: personal.fullName,
+            email: personal.email,
+            phone: personal.phone,
+            dob: new Date(personal.dob),
+            gender: personal.gender,
+            address: personal.address,
+            emergencyContact: { name: personal.emergencyName, phone: personal.emergencyPhone },
+            height: Number(health.height),
+            weight: Number(health.weight),
+            bmi,
+            medicalConditions: health.medicalConditions,
+            medications: health.medications,
+            injuries: health.injuries,
+            photoUrl,
+            lockerNumber: '',
+            membershipTier: selectedPlan.name,
+            membershipStatus: 'pending_verification',   // hnbIpgWebhook will set to 'active'
+            membershipExpiry: new Date(),                // hnbIpgWebhook will set correct expiry
+          });
+          await updateDoc(doc(db, 'members', uid), {
+            legacyMembershipId: personal.legacyMembershipId,
+            transportMode: personal.transportMode,
+            ...(isCouple && secondaryEmail.trim() ? { secondaryMemberEmail: secondaryEmail.trim() } : {}),
+          });
+
+          console.log('[SignupPage] Initiating HNB IPG checkout for uid:', uid);
+          await initiateHnbCheckout({
+            planId: selectedPlan.id,
+            planName: selectedPlan.name,
+            amount: selectedPlan.price,
+            uid,
+            recaptchaToken,
+            billToName: personal.fullName,
+            billToAddress: personal.address,
+            billToPhone: personal.phone,
+          });
+          // Execution stops here (user redirected to CyberSource)
+          return;
+        } catch (hnbErr: any) {
+          console.error('[SignupPage] HNB IPG payment error:', hnbErr?.message || hnbErr);
+          throw new Error(hnbErr?.message || 'Failed to initiate HNB payment. Please check your connection and try again.');
         }
       }
 
@@ -569,6 +622,7 @@ export default function SignupPage() {
                 <p className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-widest">Select Payment Method</p>
                 {([
                   { method: 'card' as const, icon: 'credit_card', label: 'Credit/Debit Card', desc: 'Pay securely via Stripe' },
+                  { method: 'hnb_ipg' as const,       icon: 'credit_card',     label: 'Credit / Debit Card', desc: 'Pay securely via HNB IPG',         badge: 'HNB IPG' },
                   { method: 'bank_transfer' as const, icon: 'account_balance', label: 'Bank Transfer', desc: 'Upload receipt for verification' },
                   { method: 'cash' as const, icon: 'payments', label: 'Cash at Gym', desc: 'Pay at reception' },
                 ]).map(opt => (
@@ -611,6 +665,40 @@ export default function SignupPage() {
                   </div>
                 </div>
               )}
+
+              {/* HNB IPG info panel + mandatory reCAPTCHA v2 */}
+              {paymentMethod === 'hnb_ipg' && (
+                <div className="space-y-4">
+                  <div className="border border-border-default p-4 flex items-start gap-3">
+                    <span className="material-symbols-outlined text-primary-container text-xl shrink-0">lock</span>
+                    <div className="space-y-2">
+                      <p className="font-label-sm text-label-sm text-on-surface uppercase tracking-widest">Secure Checkout via HNB IPG (CyberSource)</p>
+                      <p className="font-body text-body-md text-on-surface-variant">
+                        You'll be securely redirected to HNB's payment page powered by CyberSource.
+                        Your card details are processed using Point-to-Point Encryption (P2PE) and are never stored by IronHide Fitness.
+                      </p>
+                      <p className="font-body text-body-md text-on-surface-variant">
+                        Supported cards: Visa, Mastercard, UnionPay &amp; Amex. Once payment is confirmed, your membership will be activated automatically.
+                      </p>
+                    </div>
+                  </div>
+                  {/* reCAPTCHA v2 — mandatory per HNB IPG Terms & Conditions */}
+                  <div className="space-y-2">
+                    <p className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-widest">Security Check (Required)</p>
+                    <ReCaptcha
+                      onVerify={(token: string) => setRecaptchaToken(token)}
+                      onExpire={() => setRecaptchaToken('')}
+                    />
+                    {recaptchaToken && (
+                      <p className="font-body text-body-sm text-green-400 flex items-center gap-1">
+                        <span className="material-symbols-outlined text-sm">check_circle</span>
+                        Security check passed
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
 
               {paymentMethod === 'cash' && (
                 <div className="border border-yellow-600 bg-yellow-600/10 p-4">

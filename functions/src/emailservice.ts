@@ -27,6 +27,49 @@ export function getMailFromEmail(): string {
   return (process.env.GMAIL_USER || '').trim();
 }
 
+export async function sendMembershipStatusEmail(params: {
+  memberEmail: string;
+  memberName: string;
+  status: 'active' | 'expired';
+  membershipTier?: string;
+  membershipExpiry?: string;
+}): Promise<void> {
+  const { user, pass } = getCredentials();
+  if (!user || !pass) {
+    console.warn('[EmailService] Gmail not configured. Skipping membership status email.');
+    return;
+  }
+
+  const firstName = params.memberName.split(' ')[0] || 'Member';
+  const isActive = params.status === 'active';
+  const statusLabel = isActive ? 'ACTIVE' : 'DEACTIVATED';
+  const message = isActive
+    ? 'Your IronHide Fitness membership has been activated by the gym administration team.'
+    : 'Your IronHide Fitness membership has been deactivated by the gym administration team.';
+  const expiry = params.membershipExpiry ? `<li>Expiry: ${params.membershipExpiry}</li>` : '';
+
+  await createTransporter().sendMail({
+    from: `IronHide Fitness <${user}>`,
+    to: params.memberEmail,
+    subject: `Membership ${isActive ? 'Activated' : 'Deactivated'} - IronHide Fitness`,
+    html: `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 24px;">
+        <h1 style="background: #cc0000; color: #fff; padding: 20px; text-align: center;">IRONHIDE FITNESS</h1>
+        <p>Hi ${firstName},</p>
+        <p>${message}</p>
+        <div style="background: #f5f5f5; border-left: 4px solid #cc0000; padding: 16px;">
+          <p><strong>Status: ${statusLabel}</strong></p>
+          ${params.membershipTier ? `<p>Plan: ${params.membershipTier}</p>` : ''}
+          ${expiry}
+        </div>
+        <p>Visit your dashboard for the latest membership details.</p>
+        <p>IronHide Fitness<br>114C Negombo Rd, Wattala</p>
+      </div>
+    `,
+  });
+  console.log(`[EmailService] Membership status email sent to ${params.memberEmail}: ${params.status}`);
+}
+
 // Keep this for backward compatibility with invoiceService.ts
 export const MAIL_FROM_EMAIL = '';  // deprecated — use getMailFromEmail() instead
 

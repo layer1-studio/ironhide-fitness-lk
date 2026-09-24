@@ -28,7 +28,8 @@ service cloud.firestore {
       // Owner can read/write their own doc, but can NEVER touch the role field.
       // Admin can read/write ANY member doc, including role.
       allow read: if isOwner(uid) || isAdmin();
-      allow create: if isOwner(uid) && request.resource.data.role == 'customer';
+      allow create: if (isOwner(uid) && request.resource.data.role == 'customer')
+        || (isAdmin() && request.resource.data.role == 'customer');
       allow update: if (isOwner(uid) && roleUnchanged()) || isAdmin();
       allow delete: if isAdmin();
 

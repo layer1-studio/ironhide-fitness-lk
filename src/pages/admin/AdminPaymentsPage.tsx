@@ -11,6 +11,7 @@ type TabKey = 'all' | 'pending' | 'card' | 'approved' | 'rejected';
 const methodMeta: Record<AdminPayment['method'], { label: string; icon: string }> = {
   card: { label: 'Card Payment', icon: 'credit_card' },
   bank_transfer: { label: 'Bank Transfer', icon: 'account_balance' },
+  hnb_ipg: { label: 'Bank payment', icon: 'account_balance' },
   cash: { label: 'Cash at Gym', icon: 'payments' },
 };
 

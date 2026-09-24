@@ -5,6 +5,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { auth , db } from '../lib/firebase';
 import { useAuth } from '../hooks/useAuth';
 import { Button } from '../components/ui/Button';
+import { clearHnbSession } from '../lib/hnbipg';
 
 const POLL_INTERVAL_MS = 3000;
 const POLL_TIMEOUT_MS = 120000; // 2 minutes max
@@ -17,7 +18,8 @@ export default function VerifyEmailPage() {
   const [resent, setResent] = useState(false);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState('');
-  const [stripeStatus, setStripeStatus] = useState<'success' | 'cancelled' | null>(null);
+  const [paymentStatus, setPaymentStatus] = useState<'success' | 'cancelled' | null>(null);
+  const [paymentProvider, setPaymentProvider] = useState<'stripe' | 'hnb' | null>(null);
   const [bannerVisible, setBannerVisible] = useState(true);
 
   const [activating, setActivating] = useState(false);
@@ -26,25 +28,30 @@ export default function VerifyEmailPage() {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 
-  // Check for Stripe return status from URL
+  // Check for Stripe or HNB return status from URL
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    const status = params.get('stripe');
+    const stripeStatus = params.get('stripe');
+    const hnbStatus = params.get('hnb');
+    const provider = stripeStatus ? 'stripe' : hnbStatus ? 'hnb' : null;
+    const status = stripeStatus ?? hnbStatus;
     if (status === 'success' || status === 'cancelled') {
-      setStripeStatus(status as 'success' | 'cancelled');
+      setPaymentProvider(provider);
+      setPaymentStatus(status as 'success' | 'cancelled');
       // Clean up URL
       const url = new URL(window.location.href);
       url.searchParams.delete('stripe');
+      url.searchParams.delete('hnb');
       url.searchParams.delete('session_id');
       window.history.replaceState({}, '', url.toString());
     }
   }, [location.search]);
 
-    // Start polling Firestore when stripe=success
+    // Start polling Firestore after a successful Stripe or HNB payment.
   useEffect(() => {
-    if (stripeStatus !== 'success' || !user) return;
+    if (paymentStatus !== 'success' || !user) return;
 
-    console.log('[VerifyEmailPage] Starting membership activation polling for uid:', user.uid);
+    console.log(`[VerifyEmailPage] Starting ${paymentProvider} membership activation polling for uid:`, user.uid);
     setActivating(true);
 
     const checkActivation = async () => {
@@ -58,9 +65,10 @@ export default function VerifyEmailPage() {
             console.log('[VerifyEmailPage] Membership activated! Redirecting to dashboard...');
             clearInterval(pollRef.current!);
             clearTimeout(timeoutRef.current!);
+            if (paymentProvider === 'hnb') clearHnbSession();
             // Small delay so user sees the "activated" state briefly
             setTimeout(() => {
-              navigate('/dashboard', { state: { stripeActivated: true } });
+              navigate('/dashboard', { state: { stripeActivated: paymentProvider === 'stripe' } });
             }, 800);
           }
         } else {
@@ -88,7 +96,7 @@ export default function VerifyEmailPage() {
       clearInterval(pollRef.current!);
       clearTimeout(timeoutRef.current!);
     };
-  }, [stripeStatus, user, navigate]);
+  }, [paymentProvider, paymentStatus, user, navigate]);
 
   const handleResend = async () => {
     if (!user) return;
@@ -134,11 +142,11 @@ export default function VerifyEmailPage() {
         <div className="font-display text-headline-lg text-primary-container mb-12">IRONHIDE FITNESS</div>
         
         {/* Stripe Payment Return Banner */}
-        {stripeStatus === 'success' && bannerVisible && (
+        {paymentStatus === 'success' && bannerVisible && (
           <div className="mb-8 border border-green-500 bg-green-500/10 p-4 flex items-start gap-3 relative">
             <span className="material-symbols-outlined text-green-400 text-2xl shrink-0">check_circle</span>
             <div className="flex-1 text-left">
-              <p className="font-display text-body-lg uppercase text-green-400">Payment Successful ✓</p>
+              <p className="font-display text-body-lg uppercase text-green-400">{paymentProvider === 'hnb' ? 'HNB Payment Successful ✓' : 'Payment Successful ✓'}</p>
               {activating ? (
                 <p className="font-body text-body-md text-on-surface-variant mt-1">
                   Activating your membership… you'll be redirected automatically.
@@ -166,7 +174,7 @@ export default function VerifyEmailPage() {
         )}
 
         {/* Activating spinner (shown below banner when polling) */}
-        {stripeStatus === 'success' && activating && (
+        {paymentStatus === 'success' && activating && (
           <div className="mb-6 flex flex-col items-center gap-3">
             <div className="w-8 h-8 border-2 border-primary-container border-t-transparent rounded-full animate-spin" />
             <p className="font-body text-body-md text-on-surface-variant">
@@ -185,7 +193,7 @@ export default function VerifyEmailPage() {
         )}
 
 
-        {stripeStatus === 'cancelled' && bannerVisible && (
+        {paymentStatus === 'cancelled' && bannerVisible && paymentProvider === 'stripe' && (
           <div className="mb-8 border border-yellow-500 bg-yellow-500/10 p-4 flex items-start gap-3 rounded relative">
             <span className="material-symbols-outlined text-yellow-400 text-2xl shrink-0">info</span>
             <div className="flex-1 text-left">
@@ -211,14 +219,22 @@ export default function VerifyEmailPage() {
               <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
             </svg>
           </div>
-          <h1 className="font-display text-headline-lg uppercase">Verify Your Email</h1>
+          <h1 className="font-display text-headline-lg uppercase">
+            {paymentStatus === 'success' ? 'Payment Received' : 'Verify Your Email'}
+          </h1>
           <p className="font-body text-body-lg text-on-surface-variant">
-            We've sent a verification link to<br />
+            {paymentStatus === 'success'
+              ? 'Your payment was received. We are confirming your membership now.'
+              : "We've sent a verification link to"}
+            {paymentStatus !== 'success' && <><br />
+            </>}
             <span className="text-on-surface font-bold">{user?.email}</span>
           </p>
-          <p className="font-body text-body-md text-on-surface-variant">
-            Click the link in the email to activate your account, then press the button below. If you don't see it, <span className="text-on-surface font-bold">check your spam or junk folder</span>.
-          </p>
+          {paymentStatus !== 'success' && (
+            <p className="font-body text-body-md text-on-surface-variant">
+              Click the link in the email to activate your account, then press the button below. If you don't see it, <span className="text-on-surface font-bold">check your spam or junk folder</span>.
+            </p>
+          )}
 
           {error && <p className="text-error text-body-md font-body">{error}</p>}
           {resent && <p className="text-green-400 text-body-md font-body">Verification email resent.</p>}

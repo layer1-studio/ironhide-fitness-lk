@@ -4,10 +4,13 @@ import {
   addDoc, updateDoc, doc, serverTimestamp, Timestamp,
 } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
+import { storage } from '../../lib/firebase';
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { getMember, updateMember, generateMembershipId } from '../../lib/memberService';
+import { calculateBMI } from '../../lib/utils';
 import type { Member } from '../../types';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -21,7 +24,6 @@ const PLANS = [
 
 const PAYMENT_METHODS = [
   { value: 'cash',          label: 'Cash at Gym' },
-  { value: 'card',          label: 'Card Machine' },
   { value: 'bank_transfer', label: 'Bank Transfer' },
 ] as const;
 
@@ -97,6 +99,7 @@ function FieldRow({ label, children }: { label: string; children: React.ReactNod
 
 const inputCls = 'bg-surface-container-high border border-surface-container-highest text-on-surface px-4 py-2 text-body-md w-full focus:border-primary-container focus:outline-none rounded';
 const selectCls = `${inputCls} cursor-pointer`;
+const textareaCls = `${inputCls} min-h-24 resize-y`;
 
 // ── Add Member Modal (Item 5) ──────────────────────────────────────────────────
 
@@ -115,9 +118,17 @@ function AddMemberModal({ onClose, onAdded }: AddMemberModalProps) {
     address: '',
     ecName: '',
     ecPhone: '',
+    transportMode: '',
+    height: '',
+    weight: '',
+    medicalConditions: '',
+    medications: '',
+    injuries: '',
+    secondaryMemberEmail: '',
     plan: 'Monthly',
     method: 'cash' as PaymentMethod,
   });
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -127,8 +138,13 @@ function AddMemberModal({ onClose, onAdded }: AddMemberModalProps) {
 
   const handleSubmit = async () => {
     if (!form.fullName.trim()) { setError('Full name is required.'); return; }
-    if (!form.email.trim()) { setError('Email is required.'); return; }
     if (!form.phone.trim()) { setError('Phone is required.'); return; }
+    if (!form.dob) { setError('Date of birth is required.'); return; }
+    if (!form.gender) { setError('Gender is required.'); return; }
+    if (!form.address.trim()) { setError('Address is required.'); return; }
+    if (!form.transportMode) { setError('Usual transport is required.'); return; }
+    if (!form.height || Number(form.height) <= 0) { setError('Height is required.'); return; }
+    if (!form.weight || Number(form.weight) <= 0) { setError('Weight is required.'); return; }
     setSaving(true);
     setError('');
     try {
@@ -139,21 +155,38 @@ function AddMemberModal({ onClose, onAdded }: AddMemberModalProps) {
         fullName: form.fullName.trim(),
         email: form.email.trim(),
         phone: form.phone.trim(),
-        dob: form.dob || null,
+        dob: Timestamp.fromDate(new Date(`${form.dob}T00:00:00`)),
         gender: form.gender,
         address: form.address.trim(),
         emergencyContact: { name: form.ecName.trim(), phone: form.ecPhone.trim() },
-        height: null, weight: null, bmi: null,
-        medicalConditions: '', medications: '', injuries: '',
+        height: Number(form.height),
+        weight: Number(form.weight),
+        bmi: calculateBMI(Number(form.height), Number(form.weight)),
+        medicalConditions: form.medicalConditions.trim(),
+        medications: form.medications.trim(),
+        injuries: form.injuries.trim(),
         photoUrl: '',
+        transportMode: form.transportMode,
+        ...(form.secondaryMemberEmail.trim() ? { secondaryMemberEmail: form.secondaryMemberEmail.trim() } : {}),
         membershipId,
         membershipTier: selectedPlan.name,
         membershipStatus: 'active',
+        membershipStatusSource: 'admin',
         membershipExpiry: Timestamp.fromDate(expiry),
         role: 'customer',
         adminCreated: true,
         createdAt: serverTimestamp(),
       });
+
+      if (photoFile) {
+        try {
+          const photoRef = ref(storage, `members/${memberRef.id}/profile.jpg`);
+          await uploadBytes(photoRef, photoFile);
+          await updateDoc(memberRef, { photoUrl: await getDownloadURL(photoRef) });
+        } catch (photoErr) {
+          console.warn('[AdminMemberships] member created but profile photo upload failed:', photoErr);
+        }
+      }
 
       await addDoc(collection(db, 'members', memberRef.id, 'payments'), {
         amount: selectedPlan.price,
@@ -192,7 +225,7 @@ function AddMemberModal({ onClose, onAdded }: AddMemberModalProps) {
           <FieldRow label="Full Name *">
             <input className={inputCls} value={form.fullName} onChange={e => set('fullName', e.target.value)} placeholder="e.g. Kasun Perera" />
           </FieldRow>
-          <FieldRow label="Email *">
+          <FieldRow label="Email">
             <input className={inputCls} type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="email@example.com" />
           </FieldRow>
           <FieldRow label="Phone *">
@@ -219,7 +252,53 @@ function AddMemberModal({ onClose, onAdded }: AddMemberModalProps) {
           <FieldRow label="Emergency Contact Phone">
             <input className={inputCls} value={form.ecPhone} onChange={e => set('ecPhone', e.target.value)} placeholder="07X XXX XXXX" />
           </FieldRow>
+          <FieldRow label="Usual Transport *">
+            <select className={selectCls} value={form.transportMode} onChange={e => set('transportMode', e.target.value)}>
+              <option value="">Select…</option>
+              <option value="Car">Car</option>
+              <option value="Motorbike">Motorbike</option>
+              <option value="Bicycle">Bicycle</option>
+              <option value="Walk">Walk</option>
+              <option value="Public Transport">Public Transport</option>
+            </select>
+          </FieldRow>
+          <FieldRow label="Secondary Member Email">
+            <input className={inputCls} type="email" value={form.secondaryMemberEmail} onChange={e => set('secondaryMemberEmail', e.target.value)} placeholder="For couple plans (optional)" />
+          </FieldRow>
         </div>
+
+        <div className="space-y-4">
+          <h3 className="font-display text-title-md uppercase">Health Information</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <FieldRow label="Height (cm) *">
+              <input className={inputCls} type="number" min="1" value={form.height} onChange={e => set('height', e.target.value)} placeholder="e.g. 175" />
+            </FieldRow>
+            <FieldRow label="Weight (kg) *">
+              <input className={inputCls} type="number" min="1" value={form.weight} onChange={e => set('weight', e.target.value)} placeholder="e.g. 75" />
+            </FieldRow>
+          </div>
+          <FieldRow label="BMI (Auto)">
+            <div className={`${inputCls} text-on-surface-variant`}>
+              {form.height && form.weight && Number(form.height) > 0 && Number(form.weight) > 0
+                ? calculateBMI(Number(form.height), Number(form.weight))
+                : 'Enter height and weight'}
+            </div>
+          </FieldRow>
+          <FieldRow label="Pre-existing Medical Conditions">
+            <textarea className={textareaCls} value={form.medicalConditions} onChange={e => set('medicalConditions', e.target.value)} placeholder="List any conditions, or write 'None'" />
+          </FieldRow>
+          <FieldRow label="Current Medications">
+            <textarea className={textareaCls} value={form.medications} onChange={e => set('medications', e.target.value)} placeholder="List any medications, or write 'None'" />
+          </FieldRow>
+          <FieldRow label="Previous Injuries">
+            <textarea className={textareaCls} value={form.injuries} onChange={e => set('injuries', e.target.value)} placeholder="List any injuries, or write 'None'" />
+          </FieldRow>
+        </div>
+
+        <FieldRow label="Profile Photo">
+          <input className={inputCls} type="file" accept="image/*" onChange={e => setPhotoFile(e.target.files?.[0] ?? null)} />
+          <span className="text-label-sm text-on-surface-variant">Used for the member profile and face recognition entry.</span>
+        </FieldRow>
 
         <hr className="border-surface-container-highest" />
 
@@ -277,6 +356,7 @@ function ActivateModal({ member, onClose, onActivated }: ActivateModalProps) {
     try {
       await updateDoc(doc(db, 'members', member.uid), {
         membershipStatus: 'active',
+        membershipStatusSource: 'admin',
         membershipTier: selectedPlan.name,
         membershipExpiry: Timestamp.fromDate(expiry),
       });
@@ -371,6 +451,7 @@ function EditModal({ member, onClose, onSaved }: EditModalProps) {
         address: form.address.trim(),
         membershipTier: form.membershipTier,
         membershipStatus: form.membershipStatus,
+        membershipStatusSource: 'admin',
       };
       if (form.membershipExpiry) {
         updates.membershipExpiry = Timestamp.fromDate(new Date(form.membershipExpiry));
@@ -486,7 +567,7 @@ function AdminMembershipsContent() {
 
   const deactivateMember = async (uid: string) => {
     if (!window.confirm('Deactivate this membership?')) return;
-    await updateMember(uid, { membershipStatus: 'expired' });
+    await updateMember(uid, { membershipStatus: 'expired', membershipStatusSource: 'admin' });
     setMembers(prev => prev.map(m => m.uid === uid ? { ...m, membershipStatus: 'expired' } : m));
   };
 
