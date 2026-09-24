@@ -4,6 +4,7 @@ import { AuthGuard } from '../components/layout/AuthGuard';
 import { Badge } from '../components/ui/Badge';
 import { addPayment, getPayments, resolvePaymentOwnerUid } from '../lib/memberService';
 import { getStripeReturnStatus, clearStripeSession } from '../lib/stripe';
+import { getHnbReturnStatus, clearHnbSession } from '../lib/hnbipg';
 import { useAuth } from '../hooks/useAuth';
 import { formatDate, formatCurrency } from '../lib/utils';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -64,6 +65,59 @@ function StripeReturnBanner() {
         className="absolute top-3 right-3 text-on-surface-variant hover:text-on-surface"
         aria-label="Dismiss"
       >
+        <span className="material-symbols-outlined text-sm">close</span>
+      </button>
+    </div>
+  );
+}
+
+function HnbReturnBanner() {
+  const status = getHnbReturnStatus();
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    if (status) {
+      clearHnbSession();
+      const url = new URL(window.location.href);
+      url.searchParams.delete('hnb');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [status]);
+
+  if (!status || !visible) return null;
+
+  if (status === 'success') {
+    return (
+      <div className="mb-8 border border-green-500 bg-green-500/10 p-4 flex items-start gap-3 relative">
+        <span className="material-symbols-outlined text-green-400 text-2xl shrink-0">check_circle</span>
+        <div>
+          <p className="font-display text-body-lg uppercase text-green-400">Payment Successful</p>
+          <p className="font-body text-body-md text-on-surface-variant">
+            Your HNB card payment has been received. Your membership is being activated — this may take a few moments.
+            You'll receive a notification once it's confirmed.
+          </p>
+          </div>
+        <button onClick={() => setVisible(false)} className="absolute top-3 right-3 text-on-surface-variant hover:text-on-surface" aria-label="Dismiss">
+          <span className="material-symbols-outlined text-sm">close</span>
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-8 border border-yellow-500 bg-yellow-500/10 p-4 flex items-start gap-3 relative">
+      <span className="material-symbols-outlined text-yellow-400 text-2xl shrink-0">info</span>
+      <div>
+        <p className="font-display text-body-lg uppercase text-yellow-400">
+          Payment {status === 'failed' ? 'Failed' : 'Cancelled'}
+        </p>
+        <p className="font-body text-body-md text-on-surface-variant">
+          {status === 'failed'
+            ? 'Your HNB card payment was declined. Please try another payment method or contact your bank.'
+            : 'Your HNB payment was not completed. No charge has been made. You can try again from the Renew page.'}
+        </p>
+      </div>
+      <button onClick={() => setVisible(false)} className="absolute top-3 right-3 text-on-surface-variant hover:text-on-surface" aria-label="Dismiss">
         <span className="material-symbols-outlined text-sm">close</span>
       </button>
     </div>
@@ -132,6 +186,7 @@ function PaymentsContent() {
       <div className="w-24 h-1 bg-primary-container mb-12" />
 
       <StripeReturnBanner />
+      <HnbReturnBanner />
 
       {uploadMessage && (
         <div className="mb-6 border border-green-500 bg-green-500/10 p-4">
@@ -180,7 +235,10 @@ function PaymentsContent() {
               <div className="flex flex-col gap-1">
                 <span className="font-display text-headline-md">{p.plan}</span>
                 <span className="font-label-sm text-label-sm text-on-surface-variant uppercase">
-                  {p.method === 'card' ? 'Card (Stripe)' : p.method.replace('_', ' ')} · {formatDate(p.createdAt)}
+                  {p.method === 'card' ? 'Card (Stripe)'
+                  : p.method === 'hnb_ipg'
+                    ? 'Card (HNB IPG)' 
+                    : p.method.replace('_', ' ')} · {formatDate(p.createdAt)}
                 </span>
                 {/* Show Stripe session ID for card payments as a subtle reference */}
                 {p.method === 'card' && (p as Payment & { stripeSessionId?: string }).stripeSessionId && (
@@ -188,7 +246,14 @@ function PaymentsContent() {
                     ref: {(p as Payment & { stripeSessionId?: string }).stripeSessionId?.slice(0, 20)}…
                   </span>
                 )}
+                {/* Show HNB transaction ID */}
+                {p.method === 'hnb_ipg' && (p as Payment & { hnbTransactionId?: string }).hnbTransactionId && (
+                  <span className="font-label-sm text-label-sm text-on-surface-variant opacity-50 font-mono text-xs">
+                    txn: {(p as Payment & { hnbTransactionId?: string }).hnbTransactionId?.slice(0, 20)}…
+                  </span>
+                )}
               </div>
+
               <div className="flex flex-col md:items-end gap-4">
                 <div className="flex items-center gap-6">
                   <span className="font-display text-headline-md text-primary-container">

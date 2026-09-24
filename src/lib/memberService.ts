@@ -15,7 +15,7 @@ export interface AdminPayment {
   memberSecondaryEmail?: string;
   amount: number;
   plan: string;
-  method: 'card' | 'bank_transfer' | 'cash';
+  method: 'card' | 'hnb_ipg' | 'bank_transfer' | 'cash';
   status: 'confirmed' | 'pending_verification' | 'pending_cash' | 'rejected';
   receiptUrl?: string;
   createdAt: Date;

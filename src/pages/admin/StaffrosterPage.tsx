@@ -273,15 +273,9 @@ function AddStaffModal({
               <label>Email Address *</label>
               <input type="email" placeholder="name@ironhide.lk" value={form.email} onChange={set("email")} required />
             </div>
-            <div className="form-grid">
-              <div className="field">
-                <label>Phone</label>
-                <input placeholder="+94 77 000 0000" value={form.phone} onChange={set("phone")} />
-              </div>
-              <div className="field">
-                <label>Monthly Salary (Rs.)</label>
-                <input type="number" min={0} placeholder="65000" value={form.salary} onChange={set("salary")} />
-              </div>
+            <div className="field">
+              <label>Phone</label>
+              <input placeholder="+94 77 000 0000" value={form.phone} onChange={set("phone")} />
             </div>
             <div className="form-actions">
               <button type="submit" className="btn btn-primary">
@@ -587,15 +581,6 @@ export default function StaffRosterPage() {
             </span>
             <span className="kpi-sub">Deactivated staff</span>
           </div>
-          <div className="kpi kpi-plain">
-            <span className="kpi-label">Avg. Salary</span>
-            <span className="kpi-value disp" style={{ color: "var(--amber)" }}>
-              {activeStaff.length
-                ? "Rs. " + Math.round(activeStaff.reduce((sum, s) => sum + s.salary, 0) / activeStaff.length).toLocaleString()
-                : "—"}
-            </span>
-            <span className="kpi-sub">Across active staff</span>
-          </div>
         </div>
 
         <div className="panel">
@@ -643,7 +628,7 @@ export default function StaffRosterPage() {
                 <table>
                   <thead>
                     <tr>
-                      {["Employee", "Role", "Contact", "Join Date", "Salary", "Status", "Actions"].map((h) => (
+                      {["Employee", "Role", "Contact", "Join Date", "Status", "Actions"].map((h) => (
                         <th key={h}>{h}</th>
                       ))}
                     </tr>
@@ -651,7 +636,7 @@ export default function StaffRosterPage() {
                   <tbody>
                     {filtered.length === 0 ? (
                       <tr className="empty-row">
-                        <td colSpan={7}>
+                        <td colSpan={6}>
                           <div className="empty-title">No matches</div>
                           Try a different search term.
                         </td>
@@ -682,7 +667,6 @@ export default function StaffRosterPage() {
                             )}
                           </td>
                           <td style={{ whiteSpace: "nowrap", fontSize: 12, color: "var(--muted)" }}>{fmtDate(s.joinDate)}</td>
-                          <td className="salary">{s.salary ? "Rs. " + s.salary.toLocaleString() : "—"}</td>
                           <td>
                             <ActiveBadge active={s.active} />
                           </td>
@@ -739,7 +723,7 @@ h1.page-title{font-size:34px; font-weight:800; text-transform:uppercase; margin:
 .btn-emerald-outline{background:var(--emerald-soft); color:var(--emerald); border:1px solid rgba(52,211,153,0.35);}
 .btn-emerald-outline:hover{background:rgba(52,211,153,0.2);}
 .icon{width:15px; height:15px; flex-shrink:0;}
-.kpi-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:22px;}
+.kpi-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:22px;}
 @media(max-width:820px){.kpi-grid{grid-template-columns:repeat(2,1fr);}}
 .kpi{border-radius:14px; padding:16px 18px; display:flex; flex-direction:column; gap:6px; border:1px solid var(--border);}
 .kpi-hero{background:linear-gradient(145deg,var(--primary),#b5321f); border-color:transparent;}

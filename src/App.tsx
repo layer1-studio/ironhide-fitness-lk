@@ -19,6 +19,7 @@ import LoginPage from './pages/LoginPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import SignupPage from './pages/SignupPage';
 import VerifyEmailPage from './pages/VerifyEmailPage';
+import PaymentResultPage from './pages/PaymentResultPage';
 import DashboardPage from './pages/DashboardPage';
 import RenewPage from './pages/RenewPage';
 import PaymentsPage from './pages/PaymentsPage';
@@ -52,6 +53,8 @@ export default function App() {
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/signup" element={<SignupPage />} />
             <Route path="/verify-email" element={<VerifyEmailPage />} />
+            <Route path="/payment-success" element={<PaymentResultPage success />} />
+            <Route path="/payment-failed" element={<PaymentResultPage success={false} />} />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/renew" element={<RenewPage />} />
             <Route path="/payments" element={<PaymentsPage />} />

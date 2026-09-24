@@ -17,6 +17,7 @@ export interface Member {
   lockerNumber: string;
   membershipTier: string;
   membershipStatus: 'active' | 'expired' | 'pending_verification' | 'pending_cash' | 'rejected';
+  membershipStatusSource?: 'admin' | 'payment';
   membershipExpiry: Date;
   role: 'customer' | 'admin';
   createdAt: Date;
@@ -49,7 +50,7 @@ export interface Payment {
   id: string;
   amount: number;
   plan: string;
-  method: 'card' | 'bank_transfer' | 'cash';
+  method: 'card' | 'hnb_ipg' | 'bank_transfer' | 'cash';
   status: 'confirmed' | 'pending_verification' | 'pending_cash' | 'rejected';
   receiptUrl?: string;
   createdAt: Date;

@@ -4,9 +4,12 @@ import { PageWrapper } from '../components/layout/PageWrapper';
 import { AuthGuard } from '../components/layout/AuthGuard';
 import { Button } from '../components/ui/Button';
 import { Spinner } from '../components/ui/Spinner';
+import { ReCaptcha } from '../components/ui/ReCaptcha';
 import { getMembershipPlans, addPayment, updateMember } from '../lib/memberService';
 import { initiateStripeCheckout, getStripeReturnStatus, clearStripeSession } from '../lib/stripe';
+import { initiateHnbCheckout, getHnbReturnStatus, clearHnbSession } from '../lib/hnbipg';
 import { useAuth } from '../hooks/useAuth';
+import { useMember } from '../hooks/useMember';
 import type { MembershipPlan } from '../types';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../lib/firebase';
@@ -70,14 +73,67 @@ function StripeReturnBanner() {
   );
 }
 
+
+function HnbReturnBanner() {
+  const status = getHnbReturnStatus();
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    if (status) {
+      clearHnbSession();
+      const url = new URL(window.location.href);
+      url.searchParams.delete('hnb');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [status]);
+
+  if (!status || !visible) return null;
+
+  if (status === 'success') {
+    return (
+      <div className="mb-8 border border-green-500 bg-green-500/10 p-4 flex items-start gap-3 relative">
+        <span className="material-symbols-outlined text-green-400 text-2xl shrink-0">check_circle</span>
+        <div>
+          <p className="font-display text-body-lg uppercase text-green-400">Payment Successful ✓</p>
+          <p className="font-body text-body-md text-on-surface-variant">
+            Your HNB card payment has been received. Your membership is being renewed — this may take a few moments.
+            You'll receive a notification once it's confirmed.
+          </p>
+        </div>
+        <button onClick={() => setVisible(false)} className="absolute top-3 right-3 text-on-surface-variant hover:text-on-surface" aria-label="Dismiss">
+          <span className="material-symbols-outlined text-sm">close</span>
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="mb-8 border border-yellow-500 bg-yellow-500/10 p-4 flex items-start gap-3 relative">
+      <span className="material-symbols-outlined text-yellow-400 text-2xl shrink-0">info</span>
+      <div>
+        <p className="font-display text-body-lg uppercase text-yellow-400">Payment {status === 'failed' ? 'Failed' : 'Cancelled'}</p>
+        <p className="font-body text-body-md text-on-surface-variant">
+          {status === 'failed'
+            ? 'Your card payment was declined. Please check your card details or try another method.'
+            : 'Your payment was not completed. No charge has been made. You can try again below.'}
+        </p>
+      </div>
+      <button onClick={() => setVisible(false)} className="absolute top-3 right-3 text-on-surface-variant hover:text-on-surface" aria-label="Dismiss">
+        <span className="material-symbols-outlined text-sm">close</span>
+      </button>
+    </div>
+  );
+}
+
 function RenewContent() {
   const { user } = useAuth();
+  const { member, loading: memberLoading } = useMember();
   const navigate = useNavigate();
   const [plans, setPlans] = useState<MembershipPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPlan, setSelectedPlan] = useState<MembershipPlan | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'card' | 'bank_transfer' | 'cash' | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'hnb_ipg' | 'bank_transfer' | 'cash' | null>(null);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [recaptchaToken, setRecaptchaToken] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
@@ -97,8 +153,13 @@ function RenewContent() {
   }, []);
 
   const handleSubmit = async () => {
+    if (member?.membershipStatus !== 'expired') {
+      setError('Renewal is available only after your membership has been deactivated.');
+      return;
+    }
     if (!user || !selectedPlan || !paymentMethod) { setError('Please select a plan and payment method.'); return; }
     if (paymentMethod === 'bank_transfer' && !receiptFile) { setError('Please upload your receipt.'); return; }
+    if (paymentMethod === 'hnb_ipg' && !recaptchaToken) { setError('Please complete the security check (reCAPTCHA) before proceeding.'); return; }
     setSubmitting(true);
     setError('');
     try {
@@ -113,6 +174,24 @@ function RenewContent() {
           uid: user.uid,
         });
         // Execution stops here — user is redirected to Stripe
+        return;
+      }
+
+       // Card payment via HNB IPG (CyberSource)
+      if (paymentMethod === 'hnb_ipg') {
+        // This redirects the user away to CyberSource's hosted payment page.
+        // Membership activation happens via the hnbIpgWebhook Cloud Function.
+        await initiateHnbCheckout({
+          planId: selectedPlan.id,
+          planName: selectedPlan.name,
+          amount: selectedPlan.price,
+          uid: user.uid,
+          recaptchaToken,
+          billToName: member.fullName,
+          billToAddress: member.address,
+          billToPhone: member.phone,
+        });
+        // Execution stops here — user is redirected to CyberSource
         return;
       }
  
@@ -171,6 +250,23 @@ function RenewContent() {
     );
   }
 
+  if (memberLoading) {
+    return <div className="flex justify-center py-24"><Spinner size="lg" /></div>;
+  }
+
+  if (!member || member.membershipStatus !== 'expired') {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-6 text-center">
+        <span className="material-symbols-outlined text-primary-container text-6xl">verified</span>
+        <h2 className="font-display text-headline-lg uppercase">Renewal Unavailable</h2>
+        <p className="text-body-lg text-on-surface-variant font-body max-w-md">
+          You can renew only after your membership has been deactivated.
+        </p>
+        <Button variant="primary" onClick={() => navigate('/dashboard')}>BACK TO DASHBOARD</Button>
+      </div>
+    );
+  }
+
   return (
     <div className="px-margin-mobile md:px-margin-desktop py-12 max-w-2xl mx-auto">
       <h1 className="font-display text-headline-lg uppercase mb-4">RENEW MEMBERSHIP</h1>
@@ -178,6 +274,7 @@ function RenewContent() {
 
       {/* Stripe Return Banner */}
       <StripeReturnBanner />
+      <HnbReturnBanner />
 
       {loading ? <div className="flex justify-center py-12"><Spinner /></div> : (
         <div className="space-y-8">
@@ -203,6 +300,7 @@ function RenewContent() {
             <div className="space-y-4">
               {([
                 { method: 'card' as const, icon: 'credit_card', label: 'Card' },
+                { method: 'hnb_ipg' as const, icon: 'credit_card', label: 'Credit / Debit Card', badge: 'HNB IPG' },
                 { method: 'bank_transfer' as const, icon: 'account_balance', label: 'Bank Transfer' },
                 { method: 'cash' as const, icon: 'payments', label: 'Cash at Gym' },
               ]).map(opt => (
@@ -232,6 +330,39 @@ function RenewContent() {
                   <p className="font-body text-body-md text-on-surface-variant">
                     Once payment is confirmed, your membership will be renewed automatically.
                   </p>
+                </div>
+              </div>
+            )}
+            {/* HNB IPG info panel + reCAPTCHA */}
+            {paymentMethod === 'hnb_ipg' && (
+              <div className="mt-4 space-y-4">
+                <div className="border border-border-default p-4 flex items-start gap-3">
+                  <span className="material-symbols-outlined text-primary-container text-xl shrink-0">lock</span>
+                  <div className="space-y-1">
+                    <p className="font-label-sm text-label-sm text-on-surface uppercase tracking-widest">Secure Payment via HNB IPG (CyberSource)</p>
+                    <p className="font-body text-body-md text-on-surface-variant">
+                      You'll be redirected to HNB's secure payment page powered by CyberSource.
+                      Your card details are processed using Point-to-Point Encryption (P2PE) and are never stored by IronHide Fitness.
+                    </p>
+                    <p className="font-body text-body-md text-on-surface-variant">
+                      Supported cards: Visa, Mastercard, UnionPay & Amex.
+                      Once payment is confirmed, your membership will be renewed automatically.
+                    </p>
+                  </div>
+                </div>
+                {/* reCAPTCHA v2 — mandatory per HNB IPG Terms & Conditions */}
+                <div className="space-y-2">
+                  <p className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-widest">Security Check</p>
+                  <ReCaptcha
+                    onVerify={(token: string) => setRecaptchaToken(token)}
+                    onExpire={() => setRecaptchaToken('')}
+                  />
+                  {recaptchaToken && (
+                    <p className="font-body text-body-sm text-green-400 flex items-center gap-1">
+                      <span className="material-symbols-outlined text-sm">check_circle</span>
+                      Security check passed
+                    </p>
+                  )}
                 </div>
               </div>
             )}

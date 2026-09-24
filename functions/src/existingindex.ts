@@ -4,7 +4,7 @@ import type { EventContext, Change } from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import { generateAndSendInvoice } from './invoiceService';
 import { sendRejectionEmail } from './invoiceService';
-import { sendSecondaryMemberInviteEmail } from './emailservice';
+import { sendSecondaryMemberInviteEmail, sendMembershipStatusEmail } from './emailservice';
 
 
 
@@ -27,6 +27,37 @@ export const onMemberCreated = functions.firestore
       message: `Welcome to IronHide, ${data.fullName?.split(' ')[0] ?? 'Champion'}! Your membership is being processed.`,
       type: 'welcome', read: false, createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
+  });
+
+// Notify members when an administrator activates or deactivates membership.
+export const onMembershipStatusChanged = functions
+  .runWith({ secrets: ['GMAIL_USER', 'GMAIL_PASS'] })
+  .firestore
+  .document('members/{uid}')
+  .onUpdate(async (change: Change<QueryDocumentSnapshot>, context: EventContext) => {
+    const before = change.before.data();
+    const after = change.after.data();
+    if (before.membershipStatus === after.membershipStatus) return;
+
+    const status = after.membershipStatus;
+    if (status !== 'active' && status !== 'expired') return;
+    if (after.membershipStatusSource !== 'admin') return;
+    if (!after.email) {
+      console.warn('[onMembershipStatusChanged] Member has no email:', context.params.uid);
+      return;
+    }
+
+    try {
+      await sendMembershipStatusEmail({
+        memberEmail: after.email,
+        memberName: after.fullName ?? 'Member',
+        status,
+        membershipTier: after.membershipTier,
+        membershipExpiry: after.membershipExpiry?.toDate?.()?.toLocaleDateString('en-LK'),
+      });
+    } catch (err) {
+      console.warn('[onMembershipStatusChanged] Email failed (non-fatal):', err);
+    }
   });
 
 // 2. Daily expiry reminders
@@ -53,11 +84,13 @@ export const checkMembershipExpiry = functions.pubsub
 // 3. On payment confirmed — activate membership and send verification email if needed
 export const onPaymentConfirmed = functions .runWith({ secrets: ["GMAIL_USER", "GMAIL_PASS"] }) .firestore
   .document('members/{uid}/payments/{paymentId}')
-  .onUpdate(async (change: Change<QueryDocumentSnapshot>, context: EventContext) => {
+  .onWrite(async (change: Change<DocumentSnapshot>, context: EventContext) => {
+    if (!change.after.exists) return;
     const before = change.before.data();
     const after = change.after.data();
-    if (before.status === after.status) return;
+    if (!after) return;
     if (after.status !== 'confirmed') return;
+    if (before && before.status === 'confirmed') return;
     const uid = context.params.uid;
     const paymentId = context.params.paymentId;
     const plan = (after.plan as string) ?? '';

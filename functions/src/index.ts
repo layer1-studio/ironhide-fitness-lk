@@ -1,6 +1,7 @@
 // Re-export all existing functions
 export {
   onMemberCreated,
+  onMembershipStatusChanged,
   checkMembershipExpiry,
   onPaymentConfirmed,
   updateOccupancy,
@@ -13,3 +14,6 @@ export {
 
 // Export new Stripe functions
 export { createStripeCheckoutSession, stripeWebhook } from './stripe';
+
+// Export HNB IPG (CyberSource) functions
+export { createHnbCheckoutSession, hnbIpgWebhook, hnbIpgReturn } from './hnbipg';
