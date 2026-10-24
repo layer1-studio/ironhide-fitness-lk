@@ -17,3 +17,6 @@ export { createStripeCheckoutSession, stripeWebhook } from './stripe';
 
 // Export HNB IPG (CyberSource) functions
 export { createHnbCheckoutSession, hnbIpgWebhook, hnbIpgReturn } from './hnbipg';
+
+// PostgreSQL (scan data + live user mirror)
+export { syncMemberToPostgres, saveScan, listMyScans } from './postgres';

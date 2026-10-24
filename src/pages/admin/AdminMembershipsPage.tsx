@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   collection, getDocs, orderBy, query,
   addDoc, updateDoc, doc, serverTimestamp, Timestamp,
@@ -70,6 +70,41 @@ function toISODateInput(d: Date) {
   return d.toISOString().slice(0, 10);
 }
 
+const FACE_CAPTURES_KEY = 'ironhide.member-face-captures';
+
+type FaceCapture = {
+  image: string;
+  capturedAt: string;
+};
+
+type FaceCaptureMap = Record<string, FaceCapture>;
+
+function readFaceCaptures(): FaceCaptureMap {
+  const raw = window.localStorage.getItem(FACE_CAPTURES_KEY);
+  if (!raw) return {};
+
+  const parsed: unknown = JSON.parse(raw);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Saved face scans have an invalid format.');
+  }
+
+  return Object.fromEntries(
+    Object.entries(parsed).filter((entry): entry is [string, FaceCapture] => {
+      const value = entry[1];
+      return Boolean(
+        value &&
+        typeof value === 'object' &&
+        typeof (value as FaceCapture).image === 'string' &&
+        typeof (value as FaceCapture).capturedAt === 'string'
+      );
+    })
+  );
+}
+
+function writeFaceCaptures(captures: FaceCaptureMap) {
+  window.localStorage.setItem(FACE_CAPTURES_KEY, JSON.stringify(captures));
+}
+
 // ── Shared modal wrapper ───────────────────────────────────────────────────────
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
@@ -94,6 +129,184 @@ function FieldRow({ label, children }: { label: string; children: React.ReactNod
       <label className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-widest">{label}</label>
       {children}
     </div>
+  );
+}
+
+interface FaceScanModalProps {
+  member: AdminMemberRow;
+  existingCapture?: FaceCapture;
+  onClose: () => void;
+  onSaved: (uid: string, capture: FaceCapture) => void;
+  onDeleted: (uid: string) => void;
+}
+
+function FaceScanModal({ member, existingCapture, onClose, onSaved, onDeleted }: FaceScanModalProps) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const mountedRef = useRef(true);
+  const [cameraOn, setCameraOn] = useState(false);
+  const [capturedImage, setCapturedImage] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const stopCamera = () => {
+    streamRef.current?.getTracks().forEach(track => track.stop());
+    streamRef.current = null;
+    setCameraOn(false);
+  };
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      streamRef.current?.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    const stream = streamRef.current;
+    if (!cameraOn || !video || !stream) return;
+
+    video.srcObject = stream;
+    void video.play().catch(err => {
+      console.error('[AdminMemberships] camera preview failed:', err);
+      stream.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+      setCameraOn(false);
+      setError('Could not display the camera preview. Please try again.');
+    });
+  }, [cameraOn]);
+
+  const startCamera = async () => {
+    setError('');
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setError('Camera access is not available. Use a supported browser over HTTPS or localhost.');
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { facingMode: 'user' },
+      });
+      if (!mountedRef.current) {
+        stream.getTracks().forEach(track => track.stop());
+        return;
+      }
+
+      streamRef.current = stream;
+      setCameraOn(true);
+    } catch (err) {
+      stopCamera();
+      console.error('[AdminMemberships] camera access failed:', err);
+      setError('Could not start the camera. Check browser permission and try again.');
+    }
+  };
+
+  const captureFace = () => {
+    const video = videoRef.current;
+    if (!video || video.videoWidth === 0 || video.videoHeight === 0) {
+      setError('Camera is not ready yet. Please wait and try again.');
+      return;
+    }
+
+    const scale = Math.min(1, 640 / Math.max(video.videoWidth, video.videoHeight));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(video.videoWidth * scale);
+    canvas.height = Math.round(video.videoHeight * scale);
+    const context = canvas.getContext('2d');
+    if (!context) {
+      setError('Could not prepare the face scan image. Please try again.');
+      return;
+    }
+
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    setCapturedImage(canvas.toDataURL('image/jpeg', 0.78));
+    setError('');
+    stopCamera();
+  };
+
+  const saveFaceCapture = () => {
+    if (!capturedImage) return;
+    setSaving(true);
+    setError('');
+    try {
+      const next = readFaceCaptures();
+      const capture = { image: capturedImage, capturedAt: new Date().toISOString() };
+      next[member.uid] = capture;
+      writeFaceCaptures(next);
+      onSaved(member.uid, capture);
+      onClose();
+    } catch (err) {
+      console.error('[AdminMemberships] saving face scan locally failed:', err);
+      setError('Could not save the scan in this browser. Browser storage may be unavailable or full.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteFaceCapture = () => {
+    try {
+      const next = readFaceCaptures();
+      delete next[member.uid];
+      writeFaceCaptures(next);
+      onDeleted(member.uid);
+      onClose();
+    } catch (err) {
+      console.error('[AdminMemberships] deleting face scan locally failed:', err);
+      setError('Could not remove the scan from this browser. Please try again.');
+    }
+  };
+
+  const previewImage = capturedImage || existingCapture?.image;
+
+  return (
+    <Modal title={`Face Scan — ${member.fullName}`} onClose={onClose}>
+      <div className="space-y-5">
+        <div className="bg-surface-container-high border border-surface-container-highest p-4 text-body-sm text-on-surface-variant space-y-1">
+          <p>3D facial scan data is stored; the photo preview stays in this browser.</p>
+        </div>
+
+        <div className="aspect-video w-full overflow-hidden bg-black flex items-center justify-center">
+          {cameraOn ? (
+            <video ref={videoRef} autoPlay muted playsInline className="h-full w-full object-cover" />
+          ) : previewImage ? (
+            <img src={previewImage} alt={`Face scan for ${member.fullName}`} className="h-full w-full object-contain" />
+          ) : (
+            <div className="text-center text-on-surface-variant">
+              <span className="material-symbols-outlined text-5xl">face</span>
+              <p className="mt-2">No face scan saved for this member.</p>
+            </div>
+          )}
+        </div>
+
+        {existingCapture && !capturedImage && !cameraOn && (
+          <p className="text-label-sm text-on-surface-variant">
+            Saved {new Date(existingCapture.capturedAt).toLocaleString()}
+          </p>
+        )}
+        {error && <p role="alert" className="text-error text-body-sm">{error}</p>}
+
+        <div className="flex flex-wrap gap-3 justify-end">
+          {cameraOn ? (
+            <Button variant="primary" onClick={captureFace}>CAPTURE FACE</Button>
+          ) : (
+            <Button variant="secondary" onClick={() => void startCamera()}>
+              {previewImage ? 'RETAKE SCAN' : 'START CAMERA'}
+            </Button>
+          )}
+          {capturedImage && (
+            <Button variant="primary" loading={saving} onClick={saveFaceCapture}>SAVE SCAN</Button>
+          )}
+          {existingCapture && !capturedImage && !cameraOn && (
+            <Button variant="ghost" onClick={deleteFaceCapture}>DELETE SCAN</Button>
+          )}
+          <Button variant="ghost" onClick={onClose}>CLOSE</Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -297,7 +510,7 @@ function AddMemberModal({ onClose, onAdded }: AddMemberModalProps) {
 
         <FieldRow label="Profile Photo">
           <input className={inputCls} type="file" accept="image/*" onChange={e => setPhotoFile(e.target.files?.[0] ?? null)} />
-          <span className="text-label-sm text-on-surface-variant">Used for the member profile and face recognition entry.</span>
+          <span className="text-label-sm text-on-surface-variant">Used for the member profile. Capture a face scan separately from the membership list.</span>
         </FieldRow>
 
         <hr className="border-surface-container-highest" />
@@ -532,6 +745,9 @@ function AdminMembershipsContent() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [activateMember, setActivateMember] = useState<AdminMemberRow | null>(null);
   const [editMember, setEditMember] = useState<AdminMemberRow | null>(null);
+  const [faceScanMember, setFaceScanMember] = useState<AdminMemberRow | null>(null);
+  const [faceCaptures, setFaceCaptures] = useState<FaceCaptureMap>({});
+  const [faceCaptureLoadError, setFaceCaptureLoadError] = useState('');
 
   const loadMembers = async () => {
     setLoading(true);
@@ -565,6 +781,15 @@ function AdminMembershipsContent() {
 
   useEffect(() => { void loadMembers(); }, []);
 
+  useEffect(() => {
+    try {
+      setFaceCaptures(readFaceCaptures());
+    } catch (err) {
+      console.error('[AdminMemberships] loading local face scans failed:', err);
+      setFaceCaptureLoadError('Saved face scans could not be read from this browser.');
+    }
+  }, []);
+
   const deactivateMember = async (uid: string) => {
     if (!window.confirm('Deactivate this membership?')) return;
     await updateMember(uid, { membershipStatus: 'expired', membershipStatusSource: 'admin' });
@@ -595,6 +820,11 @@ function AdminMembershipsContent() {
         </Button>
       </div>
 
+      <div className="bg-surface-container-high border border-surface-container-highest p-4 text-body-sm text-on-surface-variant">
+        3D facial scan data is stored; the photo preview stays in this browser.
+        {faceCaptureLoadError && <p role="alert" className="mt-2 text-error">{faceCaptureLoadError}</p>}
+      </div>
+
       {/* Filters */}
       <div className="flex flex-col gap-4 md:flex-row md:items-end">
         <div className="flex-1">
@@ -615,10 +845,10 @@ function AdminMembershipsContent() {
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-left min-w-[900px]">
+          <table className="w-full text-left min-w-[1040px]">
             <thead>
               <tr className="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-widest border-b border-surface-container-highest">
-                {['ID', 'Member', 'Plan', 'Email', 'Status', 'Expiry', 'Joined', 'Actions'].map(h => (
+                {['ID', 'Member', 'Plan', 'Email', 'Status', 'Expiry', 'Joined', 'Face Scan', 'Actions'].map(h => (
                   <th key={h} className="py-3 pr-4 font-medium">{h}</th>
                 ))}
               </tr>
@@ -626,7 +856,7 @@ function AdminMembershipsContent() {
             <tbody>
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-on-surface-variant text-body-md">
+                  <td colSpan={9} className="py-12 text-center text-on-surface-variant text-body-md">
                     No members found.
                   </td>
                 </tr>
@@ -642,6 +872,16 @@ function AdminMembershipsContent() {
                     {m.membershipExpiry ? m.membershipExpiry.toLocaleDateString() : '—'}
                   </td>
                   <td className="py-4 pr-4 text-on-surface-variant text-sm">{m.createdAt.toLocaleDateString()}</td>
+                  <td className="py-4 pr-4">
+                    <button
+                      title={faceCaptures[m.uid] ? 'View or retake face scan' : 'Capture face scan'}
+                      onClick={() => setFaceScanMember(m)}
+                      className="flex items-center gap-1 px-3 py-1.5 text-label-sm border border-surface-container-highest text-on-surface-variant hover:border-primary-container hover:text-primary-container transition rounded"
+                    >
+                      <span className="material-symbols-outlined text-sm">{faceCaptures[m.uid] ? 'visibility' : 'photo_camera'}</span>
+                      {faceCaptures[m.uid] ? 'View scan' : 'Scan face'}
+                    </button>
+                  </td>
                   <td className="py-4 pr-4">
                     <div className="flex items-center gap-2">
                       {/* Activate / Renew */}
@@ -708,6 +948,19 @@ function AdminMembershipsContent() {
               m.uid === editMember.uid ? { ...m, ...updates } : m
             ))
           }
+        />
+      )}
+      {faceScanMember && (
+        <FaceScanModal
+          member={faceScanMember}
+          existingCapture={faceCaptures[faceScanMember.uid]}
+          onClose={() => setFaceScanMember(null)}
+          onSaved={(uid, capture) => setFaceCaptures(prev => ({ ...prev, [uid]: capture }))}
+          onDeleted={uid => setFaceCaptures(prev => {
+            const next = { ...prev };
+            delete next[uid];
+            return next;
+          })}
         />
       )}
     </div>

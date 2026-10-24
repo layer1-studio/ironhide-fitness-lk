@@ -1,0 +1,284 @@
+diff --git a/.env.local.example b/.env.local.example
+index 41f1905..2950a62 100644
+--- a/.env.local.example
++++ b/.env.local.example
+@@ -27,3 +27,8 @@ APP_URL=https://ironhide-fitness.web.app
+ # ── Email ────────────────────────────────────────────────────────────────────
+ GMAIL_USER=your_gmail_address@gmail.com
+ GMAIL_PASS=your_gmail_app_password
++
++# ── PostgreSQL (scan DB) ─────────────────────────────────────────────────────
++# Server-side only. Do NOT prefix with VITE_. In production it is stored as a Firebase secret:
++#   firebase functions:secrets:set DATABASE_URL
++DATABASE_URL=postgresql://ironhide_app:password@localhost:5432/ironhide_scans
+diff --git a/functions/db/migrations/001_init.sql b/functions/db/migrations/001_init.sql
+new file mode 100644
+index 0000000..7da2b45
+--- /dev/null
++++ b/functions/db/migrations/001_init.sql
+@@ -0,0 +1,40 @@
++-- IronHide scan database (separate from Firestore). Run once per environment.
++CREATE EXTENSION IF NOT EXISTS vector;     -- pgvector
++CREATE EXTENSION IF NOT EXISTS pgcrypto;   -- gen_random_uuid()
++
++CREATE TABLE IF NOT EXISTS schema_migrations (
++  name text PRIMARY KEY,
++  applied_at timestamptz NOT NULL DEFAULT now()
++);
++
++-- Live mirror of Firestore members/{uid}. Only what the scan DB needs (no medical data).
++CREATE TABLE IF NOT EXISTS users (
++  uid               text PRIMARY KEY,           -- Firebase Auth UID
++  full_name         text,
++  email             text,
++  phone             text,
++  role              text NOT NULL DEFAULT 'customer',
++  membership_tier   text,
++  membership_status text,
++  membership_expiry timestamptz,
++  created_at        timestamptz NOT NULL DEFAULT now(),
++  updated_at        timestamptz NOT NULL DEFAULT now()
++);
++CREATE INDEX IF NOT EXISTS users_email_idx ON users (lower(email));
++
++-- Scanned data. Deleting a user removes their scans (erasure requests).
++CREATE TABLE IF NOT EXISTS scans (
++  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
++  uid         text NOT NULL REFERENCES users(uid) ON DELETE CASCADE,
++  scan_type   text NOT NULL DEFAULT 'face' CHECK (scan_type IN ('face','body','other')),
++  points_3d   jsonb,            -- [[x,y,z], ...] raw 3D vector/point data
++  point_count integer GENERATED ALWAYS AS (jsonb_array_length(points_3d)) STORED,
++  embedding   vector(512),      -- optional feature vector for similarity search
++  device      text,
++  meta        jsonb NOT NULL DEFAULT '{}'::jsonb,
++  created_at  timestamptz NOT NULL DEFAULT now(),
++  CHECK (points_3d IS NOT NULL OR embedding IS NOT NULL)
++);
++CREATE INDEX IF NOT EXISTS scans_uid_created_idx ON scans (uid, created_at DESC);
++CREATE INDEX IF NOT EXISTS scans_embedding_hnsw_idx
++  ON scans USING hnsw (embedding vector_cosine_ops);
+diff --git a/functions/db/migrations/002_supabase_rls.sql b/functions/db/migrations/002_supabase_rls.sql
+new file mode 100644
+index 0000000..75c1bbb
+--- /dev/null
++++ b/functions/db/migrations/002_supabase_rls.sql
+@@ -0,0 +1,5 @@
++-- Supabase auto-exposes public tables through its REST API using the anon key.
++-- Enable RLS with no policies so only our server-side connection (postgres role) can read/write.
++ALTER TABLE users ENABLE ROW LEVEL SECURITY;
++ALTER TABLE scans ENABLE ROW LEVEL SECURITY;
++ALTER TABLE schema_migrations ENABLE ROW LEVEL SECURITY;
+diff --git a/functions/package.json b/functions/package.json
+index 63eae1d..969ef6c 100644
+--- a/functions/package.json
++++ b/functions/package.json
+@@ -3,7 +3,8 @@
+   "scripts": {
+     "build": "tsc",
+     "serve": "npm run build && firebase emulators:start --only functions",
+-    "deploy": "firebase deploy --only functions"
++    "deploy": "firebase deploy --only functions",
++    "migrate": "node lib/db/migrate.js"
+   },
+   "engines": {
+     "node": "20"
+@@ -15,10 +16,12 @@
+     "firebase-admin": "^11.0.0",
+     "firebase-functions": "^3.24.1",
+     "nodemailer": "^9.0.1",
++    "pg": "^8.13.0",
+     "stripe": "^14.25.0"
+   },
+   "devDependencies": {
+     "@types/nodemailer": "^8.0.1",
++    "@types/pg": "^8.11.10",
+     "typescript": "^5.0.0"
+   },
+   "private": true
+diff --git a/functions/src/db/migrate.ts b/functions/src/db/migrate.ts
+new file mode 100644
+index 0000000..6d77d79
+--- /dev/null
++++ b/functions/src/db/migrate.ts
+@@ -0,0 +1,30 @@
++// Usage (from functions/):  npm run build && DATABASE_URL=... npm run migrate
++import * as fs from 'fs';
++import * as path from 'path';
++import { getPool } from './pool';
++
++async function main() {
++  const dir = path.resolve(__dirname, '../../db/migrations');
++  const pool = getPool();
++  await pool.query(`CREATE TABLE IF NOT EXISTS schema_migrations (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())`);
++  const done = new Set((await pool.query('SELECT name FROM schema_migrations')).rows.map((r) => r.name));
++  for (const file of fs.readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()) {
++    if (done.has(file)) continue;
++    console.log('Applying', file);
++    const client = await pool.connect();
++    try {
++      await client.query('BEGIN');
++      await client.query(fs.readFileSync(path.join(dir, file), 'utf8'));
++      await client.query('INSERT INTO schema_migrations(name) VALUES ($1) ON CONFLICT DO NOTHING', [file]);
++      await client.query('COMMIT');
++    } catch (e) {
++      await client.query('ROLLBACK');
++      throw e;
++    } finally {
++      client.release();
++    }
++  }
++  await pool.end();
++  console.log('Migrations complete');
++}
++main().catch((e) => { console.error(e); process.exit(1); });
+diff --git a/functions/src/db/pool.ts b/functions/src/db/pool.ts
+new file mode 100644
+index 0000000..725cdbc
+--- /dev/null
++++ b/functions/src/db/pool.ts
+@@ -0,0 +1,21 @@
++import { Pool } from 'pg';
++
++// DATABASE_URL is a Firebase secret:  firebase functions:secrets:set DATABASE_URL
++// e.g. postgresql://user:pass@host:5432/ironhide_scans?sslmode=require
++let pool: Pool | null = null;
++
++export function getPool(): Pool {
++  if (!pool) {
++    const connectionString = process.env.DATABASE_URL;
++    if (!connectionString) throw new Error('DATABASE_URL is not set');
++    pool = new Pool({
++      connectionString,
++      max: 3,                         // each function instance is small; keep total connections low
++      idleTimeoutMillis: 30_000,
++      connectionTimeoutMillis: 10_000,
++      ssl: /sslmode=disable/.test(connectionString) ? false : { rejectUnauthorized: false },
++    });
++    pool.on('error', (e) => console.error('[pg] idle client error', e));
++  }
++  return pool;
++}
+diff --git a/functions/src/index.ts b/functions/src/index.ts
+index 26066af..fdc4bbe 100644
+--- a/functions/src/index.ts
++++ b/functions/src/index.ts
+@@ -17,3 +17,6 @@ export { createStripeCheckoutSession, stripeWebhook } from './stripe';
+ 
+ // Export HNB IPG (CyberSource) functions
+ export { createHnbCheckoutSession, hnbIpgWebhook, hnbIpgReturn } from './hnbipg';
++
++// PostgreSQL (scan data + live user mirror)
++export { syncMemberToPostgres, saveScan, listMyScans } from './postgres';
+diff --git a/functions/src/postgres.ts b/functions/src/postgres.ts
+new file mode 100644
+index 0000000..3d8d7ce
+--- /dev/null
++++ b/functions/src/postgres.ts
+@@ -0,0 +1,83 @@
++import * as functions from 'firebase-functions';
++import type { Change, EventContext } from 'firebase-functions';
++import type { DocumentSnapshot } from 'firebase-functions/v1/firestore';
++import { getPool } from './db/pool';
++
++const RUN: functions.RuntimeOptions = { secrets: ['DATABASE_URL'], timeoutSeconds: 60 };
++const EMBEDDING_DIM = 512;      // must match vector(512) in 001_init.sql
++const MAX_POINTS = 20_000;
++
++const toDate = (v: any): Date | null =>
++  v?.toDate ? v.toDate() : v instanceof Date ? v : v ? new Date(v) : null;
++
++// ── 1. Live sync: Firestore members/{uid} → Postgres users ────────────────────
++export const syncMemberToPostgres = functions
++  .runWith(RUN)
++  .firestore.document('members/{uid}')
++  .onWrite(async (change: Change<DocumentSnapshot>, context: EventContext) => {
++    const uid = context.params.uid as string;
++    const pool = getPool();
++
++    if (!change.after.exists) {                       // member deleted → cascade-delete scans
++      await pool.query('DELETE FROM users WHERE uid = $1', [uid]);
++      return;
++    }
++    const d = change.after.data()!;
++    await pool.query(
++      `INSERT INTO users (uid, full_name, email, phone, role, membership_tier, membership_status, membership_expiry)
++       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
++       ON CONFLICT (uid) DO UPDATE SET
++         full_name = EXCLUDED.full_name, email = EXCLUDED.email, phone = EXCLUDED.phone,
++         role = EXCLUDED.role, membership_tier = EXCLUDED.membership_tier,
++         membership_status = EXCLUDED.membership_status, membership_expiry = EXCLUDED.membership_expiry,
++         updated_at = now()`,
++      [uid, d.fullName ?? null, d.email ?? null, d.phone ?? null, d.role ?? 'customer',
++       d.membershipTier ?? null, d.membershipStatus ?? null, toDate(d.membershipExpiry)],
++    );
++  });
++
++// ── 2. Save a scan (callable; auth required) ──────────────────────────────────
++export const saveScan = functions.runWith(RUN).https.onCall(async (data, context) => {
++  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Sign in required');
++  const uid = context.auth.uid;
++
++  const { points3d, embedding, scanType = 'face', device = null, meta = {} } = data ?? {};
++
++  if (!['face', 'body', 'other'].includes(scanType))
++    throw new functions.https.HttpsError('invalid-argument', 'Invalid scanType');
++
++  if (points3d != null) {
++    const ok = Array.isArray(points3d) && points3d.length > 0 && points3d.length <= MAX_POINTS &&
++      points3d.every((p: any) => Array.isArray(p) && p.length === 3 && p.every(Number.isFinite));
++    if (!ok) throw new functions.https.HttpsError('invalid-argument', `points3d must be 1–${MAX_POINTS} [x,y,z] triples`);
++  }
++  if (embedding != null) {
++    const ok = Array.isArray(embedding) && embedding.length === EMBEDDING_DIM && embedding.every(Number.isFinite);
++    if (!ok) throw new functions.https.HttpsError('invalid-argument', `embedding must be ${EMBEDDING_DIM} numbers`);
++  }
++  if (points3d == null && embedding == null)
++    throw new functions.https.HttpsError('invalid-argument', 'Provide points3d and/or embedding');
++
++  const { rows } = await getPool().query(
++    `INSERT INTO scans (uid, scan_type, points_3d, embedding, device, meta)
++     VALUES ($1,$2,$3::jsonb,$4::vector,$5,$6::jsonb) RETURNING id, created_at`,
++    [uid, scanType, points3d ? JSON.stringify(points3d) : null,
++     embedding ? `[${embedding.join(',')}]` : null, device, JSON.stringify(meta)],
++  ).catch((e) => {
++    // FK failure = Firestore→Postgres sync hasn't landed yet
++    if (e.code === '23503') throw new functions.https.HttpsError('failed-precondition', 'Profile not synced yet, retry shortly');
++    throw e;
++  });
++  return { id: rows[0].id, createdAt: rows[0].created_at };
++});
++
++// ── 3. List the caller's scans (metadata only, no raw points) ─────────────────
++export const listMyScans = functions.runWith(RUN).https.onCall(async (_data, context) => {
++  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Sign in required');
++  const { rows } = await getPool().query(
++    `SELECT id, scan_type, point_count, device, created_at
++       FROM scans WHERE uid = $1 ORDER BY created_at DESC LIMIT 50`,
++    [context.auth.uid],
++  );
++  return rows;
++});
+diff --git a/src/lib/scanService.ts b/src/lib/scanService.ts
+new file mode 100644
+index 0000000..fc5aad2
+--- /dev/null
++++ b/src/lib/scanService.ts
+@@ -0,0 +1,18 @@
++import { httpsCallable } from 'firebase/functions';
++import { functions } from './firebase';
++
++export type Point3D = [number, number, number];
++
++export interface SaveScanInput {
++  points3d?: Point3D[];
++  embedding?: number[];           // 512 dims
++  scanType?: 'face' | 'body' | 'other';
++  device?: string;
++  meta?: Record<string, unknown>;
++}
++
++export const saveScan = async (input: SaveScanInput) =>
++  (await httpsCallable<SaveScanInput, { id: string; createdAt: string }>(functions, 'saveScan')(input)).data;
++
++export const listMyScans = async () =>
++  (await httpsCallable<void, Array<{ id: string; scan_type: string; point_count: number | null; device: string | null; created_at: string }>>(functions, 'listMyScans')()).data;
