@@ -37,6 +37,7 @@ import SettingsPage from './pages/SettingsPage';
 import StaffParkingPage from './pages/StaffParkingPage';
 import SecondaryMemberSetupPage from './pages/SecondaryMemberSetupPage';
 import NotFoundPage from './pages/NotFoundPage';
+import { BiometricScanner } from './components/BiometricScanner';
 
 export default function App() {
   return (
@@ -71,6 +72,10 @@ export default function App() {
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/staff/parking" element={<StaffParkingPage />} />
             <Route path="/secondary-setup" element={<SecondaryMemberSetupPage />} />
+            
+            {/* --- Biometric Scanner Route Added Here --- */}
+            <Route path="/gate-scanner" element={<BiometricScanner />} />
+            
             <Route path="*" element={<NotFoundPage />} />
             <Route path="/admin" element={<AuthGuard><AdminGuard><AdminPageWrapper /></AdminGuard></AuthGuard>}>
               <Route index element={<Navigate to="dashboard" replace />} />
