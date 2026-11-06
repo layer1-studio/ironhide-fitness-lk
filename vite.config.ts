@@ -23,4 +23,13 @@ function cybersourcePostRedirect(): Plugin {
 export default defineConfig({
   plugins: [react(), cybersourcePostRedirect()],
   base: process.env.DEPLOY_TARGET === 'gh-pages' ? '/ironhide-fitness-lk/' : '/',
+  server: {
+    proxy: {
+      '/biometric-api': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/biometric-api/, '/api'),
+      },
+    },
+  },
 })
