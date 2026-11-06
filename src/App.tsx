@@ -74,7 +74,7 @@ export default function App() {
             <Route path="/secondary-setup" element={<SecondaryMemberSetupPage />} />
             
             {/* --- Biometric Scanner Route Added Here --- */}
-            <Route path="/gate-scanner" element={<BiometricScanner />} />
+            <Route path="/gate-scanner" element={<AuthGuard><AdminGuard><BiometricScanner /></AdminGuard></AuthGuard>} />
             
             <Route path="*" element={<NotFoundPage />} />
             <Route path="/admin" element={<AuthGuard><AdminGuard><AdminPageWrapper /></AdminGuard></AuthGuard>}>

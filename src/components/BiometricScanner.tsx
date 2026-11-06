@@ -31,9 +31,23 @@ export const BiometricScanner: React.FC = () => {
 
       setMessage('Checking face against database...');
       const res = await verifyTurnstileFace(base64, 'gate_1');
-      setMessage(res.access_granted ? '✅ Access Granted! Gate Unlocked.' : `⛔ Denied: ${res.message}`);
-    } catch (err: any) {
-      setMessage('Error connecting to FastAPI backend.');
+      if (!res.access_granted) {
+        setMessage(`⛔ Denied: ${res.message}`);
+        return;
+      }
+
+      const expiry = res.membership_expiry ? new Date(res.membership_expiry) : null;
+      const membershipIsActive = res.membership_status === 'active';
+      const membershipIsCurrent = Boolean(expiry && !Number.isNaN(expiry.getTime()) && expiry.getTime() >= Date.now());
+      const paymentIsConfirmed = res.payment_status === 'confirmed';
+      if (!membershipIsActive || !membershipIsCurrent || !paymentIsConfirmed) {
+        setMessage('⛔ Denied: membership is not active, current, and paid.');
+        return;
+      }
+
+      setMessage('✅ Access Granted. Membership and payment verified.');
+    } catch (err) {
+      setMessage(err instanceof Error ? `⛔ ${err.message}` : '⛔ Biometric verification failed.');
     } finally {
       setLoading(false);
     }
@@ -57,8 +71,8 @@ export const BiometricScanner: React.FC = () => {
       setMessage('Extracting face vector & saving...');
       const res = await enrollMemberFace(currentUser.uid, base64);
       setMessage(`✅ Success: ${res.message}`);
-    } catch (err: any) {
-      setMessage('Enrollment failed. Is the Python API running?');
+    } catch (err) {
+      setMessage(err instanceof Error ? `⛔ ${err.message}` : '⛔ Enrollment failed.');
     } finally {
       setLoading(false);
     }
