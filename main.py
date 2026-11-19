@@ -141,7 +141,13 @@ def get_face_embedding(image):
             raise ValueError("Face model returned an unexpected embedding size")
         return embedding
     except Exception as error:
-        raise ValueError(f"Face detection failed: {error}") from error
+        if "Face could not be detected" in str(error):
+            raise ValueError(
+                "We could not detect a face in this photo. "
+                "Please retake the photo with your face clearly visible, facing the camera, "
+                "and with good lighting."
+            ) from error
+        raise ValueError("We could not process this face photo. Please try taking another photo.") from error
 
 
 def open_hikvision_gate():
