@@ -12,6 +12,7 @@ import { Input } from '../../components/ui/Input';
 import { getMember, updateMember, generateMembershipId } from '../../lib/memberService';
 import { calculateBMI } from '../../lib/utils';
 import type { Member } from '../../types';
+import { enrollMemberFace } from '../../services/biometricService';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -148,6 +149,8 @@ function FaceScanModal({ member, existingCapture, onClose, onSaved, onDeleted }:
   const [capturedImage, setCapturedImage] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [apiStatus, setApiStatus] = useState<'idle' | 'enrolling' | 'success' | 'error'>('idle');
+  const [apiMessage, setApiMessage] = useState('');
 
   const stopCamera = () => {
     streamRef.current?.getTracks().forEach(track => track.stop());
@@ -225,25 +228,39 @@ function FaceScanModal({ member, existingCapture, onClose, onSaved, onDeleted }:
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
     setCapturedImage(canvas.toDataURL('image/jpeg', 0.78));
     setError('');
+    setApiStatus('idle');
+    setApiMessage('');
     stopCamera();
   };
 
-  const saveFaceCapture = () => {
+  const saveFaceCapture = async () => {
     if (!capturedImage) return;
     setSaving(true);
     setError('');
+    setApiStatus('enrolling');
+    setApiMessage('Enrolling face in biometric system...');
+    let enrollmentSucceeded = false;
+
+    // Strip the data URL prefix to get raw base64 for the API
+    const base64ForApi = capturedImage.replace(/^data:image\/[a-z]+;base64,/, '');
+
     try {
-      const next = readFaceCaptures();
+      const res = await enrollMemberFace(member.uid, base64ForApi);
       const capture = { image: capturedImage, capturedAt: new Date().toISOString() };
+      const next = readFaceCaptures();
       next[member.uid] = capture;
       writeFaceCaptures(next);
       onSaved(member.uid, capture);
-      onClose();
+      setApiStatus('success');
+      setApiMessage(`✅ Biometric enrolment: ${res.message}`);
+      enrollmentSucceeded = true;
     } catch (err) {
-      console.error('[AdminMemberships] saving face scan locally failed:', err);
-      setError('Could not save the scan in this browser. Browser storage may be unavailable or full.');
+      console.error('[AdminMemberships] biometric enrolment failed:', err);
+      setApiStatus('error');
+      setApiMessage(err instanceof Error ? `⚠️ ${err.message}` : '⚠️ Biometric enrolment failed.');
     } finally {
       setSaving(false);
+      if (enrollmentSucceeded && mountedRef.current) onClose();
     }
   };
 
@@ -266,7 +283,7 @@ function FaceScanModal({ member, existingCapture, onClose, onSaved, onDeleted }:
     <Modal title={`Face Scan — ${member.fullName}`} onClose={onClose}>
       <div className="space-y-5">
         <div className="bg-surface-container-high border border-surface-container-highest p-4 text-body-sm text-on-surface-variant space-y-1">
-          <p>3D facial scan data is stored; the photo preview stays in this browser.</p>
+          <p>The captured face is sent to the biometric enrollment; the photo preview stays in this browser.</p>
         </div>
 
         <div className="aspect-video w-full overflow-hidden bg-black flex items-center justify-center">
@@ -287,6 +304,19 @@ function FaceScanModal({ member, existingCapture, onClose, onSaved, onDeleted }:
             Saved {new Date(existingCapture.capturedAt).toLocaleString()}
           </p>
         )}
+        {/* API enrolment status banner */}
+        {apiStatus !== 'idle' && (
+          <div className={`p-3 rounded text-body-sm ${
+            apiStatus === 'enrolling' ? 'bg-surface-container-high text-on-surface-variant' :
+            apiStatus === 'success'   ? 'bg-green-900/40 text-green-300 border border-green-700' :
+                                        'bg-amber-900/30 text-amber-300 border border-amber-700'
+          }`}>
+            {apiStatus === 'enrolling' && (
+              <span className="inline-block animate-spin mr-2 material-symbols-outlined text-sm">progress_activity</span>
+            )}
+            {apiMessage}
+          </div>
+        )}
         {error && <p role="alert" className="text-error text-body-sm">{error}</p>}
 
         <div className="flex flex-wrap gap-3 justify-end">
@@ -298,7 +328,7 @@ function FaceScanModal({ member, existingCapture, onClose, onSaved, onDeleted }:
             </Button>
           )}
           {capturedImage && (
-            <Button variant="primary" loading={saving} onClick={saveFaceCapture}>SAVE SCAN</Button>
+            <Button variant="primary" loading={saving} onClick={() => void saveFaceCapture()}>ENROL FACE</Button>
           )}
           {existingCapture && !capturedImage && !cameraOn && (
             <Button variant="ghost" onClick={deleteFaceCapture}>DELETE SCAN</Button>
@@ -821,7 +851,7 @@ function AdminMembershipsContent() {
       </div>
 
       <div className="bg-surface-container-high border border-surface-container-highest p-4 text-body-sm text-on-surface-variant">
-        3D facial scan data is stored; the photo preview stays in this browser.
+        Captured faces are sent to the biometric enrollment endpoint; photo previews stay in this browser.
         {faceCaptureLoadError && <p role="alert" className="mt-2 text-error">{faceCaptureLoadError}</p>}
       </div>
 

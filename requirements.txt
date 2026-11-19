@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+opencv-python
+numpy
+psycopg2-binary
+requests
+deepface
+python-dotenv
