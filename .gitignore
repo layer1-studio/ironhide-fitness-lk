@@ -21,3 +21,8 @@ firestore-debug.log
 .idea/
 *.iml
 local.properties
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
