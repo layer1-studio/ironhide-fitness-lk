@@ -13,20 +13,22 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from requests.auth import HTTPDigestAuth
+import firebase_admin
+from firebase_admin import auth, credentials, firestore
+from fastapi import Depends, Header
 
 load_dotenv()
 
-app = FastAPI(title="IronHide Biometric API")
+app = FastAPI(title="IronHide Biometric API", docs_url=None, redoc_url=None, openapi_url=None)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
         "https://ironhide-fitness-lk.vercel.app",
+        "http://localhost:5173",
+        "capacitor://localhost", "https://localhost", "http://localhost",
     ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -39,7 +41,7 @@ DB_PORT = os.getenv("DB_PORT", "5432")
 HIKVISION_IP = os.getenv("HIKVISION_IP")
 HIKVISION_USER = os.getenv("HIKVISION_USER")
 HIKVISION_PASS = os.getenv("HIKVISION_PASS")
-MATCH_THRESHOLD = 0.40
+MATCH_THRESHOLD = 0.30
 
 
 class EnrollRequest(BaseModel):
@@ -54,7 +56,7 @@ class VerifyRequest(BaseModel):
 
 def get_db_connection():
     if DATABASE_URL:
-        return psycopg2.connect(DATABASE_URL)
+        return psycopg2.connect(DATABASE_URL, connect_timeout=10)
     if not DB_PASS:
         raise RuntimeError("Set DATABASE_URL or DB_PASS in the backend environment")
     return psycopg2.connect(
@@ -63,6 +65,7 @@ def get_db_connection():
         password=DB_PASS,
         host=DB_HOST,
         port=DB_PORT,
+        connect_timeout=10,
     )
 
 
@@ -108,6 +111,30 @@ def init_db():
             )
         conn.commit()
 
+
+
+firebase_admin.initialize_app(credentials.Certificate(os.environ["FIREBASE_SERVICE_ACCOUNT"]))
+fs = firestore.client()
+
+def get_caller(authorization: str = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing token")
+    try:
+        return auth.verify_id_token(authorization.split(" ", 1)[1])
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+def is_admin(uid: str) -> bool:
+    snap = fs.collection("members").document(uid).get()   # same path your AdminGuard reads
+    return snap.exists and snap.to_dict().get("role") == "admin"
+
+@app.get("/api/health")
+def health():
+    return {"status": "ok"}
+
+@app.on_event("startup")
+def warmup():
+    DeepFace.build_model("Facenet512")
 
 @app.on_event("startup")
 def startup():
@@ -167,13 +194,13 @@ def open_hikvision_gate():
         return False
 
 
-@app.get("/health")
-def health():
-    return {"status": "ok"}
+
 
 
 @app.post("/api/enroll")
-def enroll_face(request: EnrollRequest):
+def enroll_face(request: EnrollRequest, caller=Depends(get_caller)):
+    if caller["uid"] != request.firebase_uid and not is_admin(caller["uid"]):
+        raise HTTPException(status_code=403, detail="Not allowed")
     try:
         embedding = get_face_embedding(decode_base64_image(request.image_base64))
         with closing(get_db_connection()) as conn:
@@ -210,7 +237,7 @@ def enroll_face(request: EnrollRequest):
 
 
 @app.post("/api/verify")
-def verify_face(request: VerifyRequest):
+def verify_face(request: VerifyRequest, caller=Depends(get_caller)):
     try:
         embedding = get_face_embedding(decode_base64_image(request.image_base64))
         with closing(get_db_connection()) as conn:
